@@ -1,0 +1,64 @@
+// Firestore Security Rules for Spiral (`firestore.rules`).
+//
+// Enforces person-rooted data isolation (`ARCHITECTURE.md` & `CONSTRAINTS.md`):
+// 1. A signed-in user may only read documents under their own `persons/{request.auth.uid}`.
+//    User B can never read or write `persons/{userA}/**`.
+// 2. Writes that set or modify `nextUnlockAt`, `safety`, `bridges`, `patternFlags`,
+//    `synthesis`, or `safetyEvents` happen exclusively through the Firebase Admin SDK
+//    in Next.js server route handlers (`allow write: if false` for client SDKs).
+// 3. Internal `patternFlags` and `safetyEvents` are never readable directly from client SDKs
+//    so clinical/internal pattern labels and safety scores remain invisible (`MENTAL-MODEL.md`).
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(personId) {
+      return request.auth != null && request.auth.uid == personId;
+    }
+
+    match /persons/{personId} {
+      allow read: if isOwner(personId);
+      allow create, update: if isOwner(personId)
+        && request.resource.data.ageAttested18 == true;
+      allow delete: if isOwner(personId);
+
+      match /journeys/{journeyId} {
+        allow read: if isOwner(personId);
+        allow write: if false;
+
+        match /sessions/{day} {
+          allow read: if isOwner(personId);
+          allow write: if false;
+
+          match /answers/{answerId} {
+            allow read: if isOwner(personId);
+            allow write: if false;
+          }
+        }
+
+        match /bridges/{day} {
+          allow read: if isOwner(personId);
+          allow write: if false;
+        }
+
+        match /patternFlags/{flagId} {
+          allow read, write: if false;
+        }
+
+        match /synthesis/{docId} {
+          allow read: if isOwner(personId);
+          allow write: if false;
+        }
+      }
+
+      match /safetyEvents/{eventId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
