@@ -14,7 +14,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { APP_META } from "@/lib/config";
 import type { ClientSafeSynthesis } from "@/lib/db/schema";
 import { authorizedFetch } from "@/lib/firebase/client";
@@ -36,67 +36,79 @@ export default function SynthesisPage() {
   const [synthesis, setSynthesis] = useState<ClientSafeSynthesis | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
+
+  /**
+   * Loads a saved Day 5 synthesis or triggers generation, surfacing a calm retry option on failure.
+   */
+  const loadOrGenerate = useCallback(async (): Promise<void> => {
+    if (inFlightRef.current) {
+      return;
+    }
+    inFlightRef.current = true;
+    setLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const getRes = await authorizedFetch("/api/synthesis", {
+        method: "GET",
+      });
+      if (getRes.status === 401) {
+        router.replace("/start");
+        return;
+      }
+      if (getRes.status === 403) {
+        router.replace("/paused");
+        return;
+      }
+      if (getRes.status === 404) {
+        router.replace("/start");
+        return;
+      }
+
+      const initial = (await getRes.json()) as SynthesisApiResponse;
+      if (initial.state === "ready" && initial.synthesis) {
+        setSynthesis(initial.synthesis);
+        return;
+      }
+
+      // Trigger Day 5 pattern map + synthesis generation
+      const postRes = await authorizedFetch("/api/synthesis", {
+        method: "POST",
+        signal: AbortSignal.timeout(195_000),
+      });
+      const generated = (await postRes.json()) as SynthesisApiResponse;
+      if (!postRes.ok || !generated.synthesis) {
+        if (postRes.status === 400) {
+          router.replace("/session");
+          return;
+        }
+        setErrorMessage(
+          "Your closing reflection took longer than expected. Your five days of words are safe.",
+        );
+        return;
+      }
+
+      setSynthesis(generated.synthesis);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+        router.replace("/start");
+        return;
+      }
+      logError("SynthesisPage.loadOrGenerate.failed", error);
+      setErrorMessage(
+        "Your closing reflection took longer than expected. Your five days of words are safe.",
+      );
+    } finally {
+      inFlightRef.current = false;
+      setLoading(false);
+    }
+  }, [router]);
 
   useEffect(() => {
     logInfo("SynthesisPage.mount");
-    const loadOrGenerate = async (): Promise<void> => {
-      try {
-        const getRes = await authorizedFetch("/api/synthesis", {
-          method: "GET",
-        });
-        if (getRes.status === 401) {
-          router.replace("/start");
-          return;
-        }
-        if (getRes.status === 403) {
-          router.replace("/paused");
-          return;
-        }
-        if (getRes.status === 404) {
-          router.replace("/start");
-          return;
-        }
-
-        const initial = (await getRes.json()) as SynthesisApiResponse;
-        if (initial.state === "ready" && initial.synthesis) {
-          setSynthesis(initial.synthesis);
-          setLoading(false);
-          return;
-        }
-
-        // Trigger Day 5 pattern map + synthesis generation
-        const postRes = await authorizedFetch("/api/synthesis", {
-          method: "POST",
-        });
-        const generated = (await postRes.json()) as SynthesisApiResponse;
-        if (!postRes.ok || !generated.synthesis) {
-          if (postRes.status === 400) {
-            router.replace("/session");
-            return;
-          }
-          setErrorMessage(
-            generated.error ??
-              "Could not generate your Day 5 reflection right now.",
-          );
-          setLoading(false);
-          return;
-        }
-
-        setSynthesis(generated.synthesis);
-        setLoading(false);
-      } catch (error: unknown) {
-        if (error instanceof Error && error.message === "AUTH_REQUIRED") {
-          router.replace("/start");
-          return;
-        }
-        logError("SynthesisPage.loadOrGenerate.failed", error);
-        setErrorMessage("Unable to load your reflection. Refresh to retry.");
-        setLoading(false);
-      }
-    };
-
     void loadOrGenerate();
-  }, [router]);
+  }, [loadOrGenerate]);
 
   /**
    * Saves `"Did this land?"` (`true` / `false`) feedback for a single insight card.
@@ -207,16 +219,25 @@ export default function SynthesisPage() {
         <Link href="/" className={styles.brand}>
           Spiral
         </Link>
-        <span className={styles.dayTag}>Day 5 · Complete</span>
+        <span className={styles.dayTag}>
+          {synthesis ? "Day 5 · Complete" : "Day 5 · Reflection"}
+        </span>
       </header>
 
       <main className={styles.main}>
         <h1 className={styles.heading}>What surfaced across your five days</h1>
 
-        {errorMessage ? (
-          <div className={styles.errorBox} role="alert">
-            {errorMessage}
-          </div>
+        {errorMessage && !synthesis ? (
+          <section className={styles.retryCard} role="alert">
+            <p className={styles.retryMessage}>{errorMessage}</p>
+            <button
+              type="button"
+              className={styles.retryButton}
+              onClick={() => void loadOrGenerate()}
+            >
+              Try again
+            </button>
+          </section>
         ) : null}
 
         {synthesis ? (

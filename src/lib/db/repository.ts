@@ -23,6 +23,8 @@ import {
   type BridgeDoc,
   BridgeDocSchema,
   type CrisisType,
+  type DemoSynthesisCacheDoc,
+  DemoSynthesisCacheDocSchema,
   type JourneyDoc,
   JourneyDocSchema,
   type JourneyStatus,
@@ -60,7 +62,10 @@ interface LocalPersonNode {
 
 interface LocalStoreRoot {
   persons: Record<string, LocalPersonNode>;
+  demoCache?: Record<string, DemoSynthesisCacheDoc>;
 }
+
+const DEMO_SYNTHESIS_CACHE_DOC_ID = "career_fog_synthesis";
 
 const LOCAL_STORE_PATH = join(
   process.cwd(),
@@ -344,7 +349,12 @@ export async function updateJourney(
   patch: Partial<
     Pick<
       JourneyDoc,
-      "status" | "currentDay" | "nextUnlockAt" | "crisisType" | "completedAt"
+      | "status"
+      | "currentDay"
+      | "nextUnlockAt"
+      | "crisisType"
+      | "isDemoSeed"
+      | "completedAt"
     >
   >,
 ): Promise<JourneyDoc> {
@@ -1027,4 +1037,89 @@ export async function recordSafetyEvent(
     .set(eventDoc);
 
   return eventDoc;
+}
+
+/**
+ * Fetches the reusable seeded demo synthesis from `demoCache/career_fog_synthesis` in Firestore,
+ * or `null` if no demo synthesis has been saved yet.
+ */
+export async function getCachedDemoSynthesis(): Promise<DemoSynthesisCacheDoc | null> {
+  logInfo("db.getCachedDemoSynthesis");
+
+  if (!isFirebaseAdminConfigured() && process.env.NODE_ENV !== "production") {
+    const store = readLocalStore();
+    const cached = store.demoCache?.[DEMO_SYNTHESIS_CACHE_DOC_ID];
+    return cached ? DemoSynthesisCacheDocSchema.parse(cached) : null;
+  }
+
+  const snap = await getAdminFirestore()
+    .collection("demoCache")
+    .doc(DEMO_SYNTHESIS_CACHE_DOC_ID)
+    .get();
+
+  if (!snap.exists) {
+    return null;
+  }
+  return DemoSynthesisCacheDocSchema.parse(
+    normalizeTimestamps(snap.data() as Record<string, unknown>),
+  );
+}
+
+/**
+ * Persists a validated synthesis + pattern flags from the seeded demo journey into Firestore
+ * (`demoCache/career_fog_synthesis`) so subsequent demo runs load instantly without live Gemini calls.
+ */
+export async function saveCachedDemoSynthesis(params: {
+  crisisType: CrisisType;
+  flags: PatternFlagDoc[];
+  synthesis: SynthesisDoc;
+}): Promise<DemoSynthesisCacheDoc> {
+  const validated = DemoSynthesisCacheDocSchema.parse({
+    crisisType: params.crisisType,
+    flags: params.flags,
+    synthesis: params.synthesis,
+    updatedAt: new Date().toISOString(),
+  });
+
+  logInfo("db.saveCachedDemoSynthesis", {
+    flagCount: validated.flags.length,
+    insightCount: validated.synthesis.insights.length,
+  });
+
+  if (!isFirebaseAdminConfigured() && process.env.NODE_ENV !== "production") {
+    const store = readLocalStore();
+    store.demoCache = store.demoCache ?? {};
+    store.demoCache[DEMO_SYNTHESIS_CACHE_DOC_ID] = validated;
+    writeLocalStore(store);
+    return validated;
+  }
+
+  await getAdminFirestore()
+    .collection("demoCache")
+    .doc(DEMO_SYNTHESIS_CACHE_DOC_ID)
+    .set(validated);
+
+  return validated;
+}
+
+/**
+ * Clears the cached demo synthesis document during automated tests so both live generation
+ * and cached instant replay paths can be verified deterministically.
+ */
+export async function clearCachedDemoSynthesisForTests(): Promise<void> {
+  logInfo("db.clearCachedDemoSynthesisForTests");
+
+  if (!isFirebaseAdminConfigured() && process.env.NODE_ENV !== "production") {
+    const store = readLocalStore();
+    if (store.demoCache) {
+      delete store.demoCache[DEMO_SYNTHESIS_CACHE_DOC_ID];
+      writeLocalStore(store);
+    }
+    return;
+  }
+
+  await getAdminFirestore()
+    .collection("demoCache")
+    .doc(DEMO_SYNTHESIS_CACHE_DOC_ID)
+    .delete();
 }

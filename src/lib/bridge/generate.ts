@@ -173,6 +173,16 @@ export async function generateDayBridge(params: {
     promptVersion: PROMPT_VERSION,
   });
 
+  const day5TimeoutOptions =
+    day === 5
+      ? {
+          timeoutMs: config.synthesisTimeoutMs,
+          maxRetries: config.synthesisMaxRetries,
+          fallbackModel: config.synthesisFallbackModel,
+          fallbackThinkingLevel: "low" as const,
+        }
+      : {};
+
   const first = await generateStructuredInteraction(
     {
       caller: `bridge.day_${day}.attempt_1`,
@@ -181,6 +191,7 @@ export async function generateDayBridge(params: {
       temperature: 0.65,
       systemInstruction: BRIDGE_SYSTEM_INSTRUCTION,
       prompt: basePrompt,
+      ...day5TimeoutOptions,
     },
     BridgeCandidateSchema,
   );
@@ -219,6 +230,7 @@ Rewrite it as ONE single line under 32 words, zero advice, ending with "?". Retu
       temperature: 0.5,
       systemInstruction: BRIDGE_SYSTEM_INSTRUCTION,
       prompt: retryPrompt,
+      ...day5TimeoutOptions,
     },
     BridgeCandidateSchema,
   );

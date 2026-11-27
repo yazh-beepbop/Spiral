@@ -29,11 +29,13 @@ import { POST as resumePost } from "../src/app/api/journey/resume/route";
 import { POST as startPost } from "../src/app/api/journey/start/route";
 import { GET as sessionCurrentGet } from "../src/app/api/session/current/route";
 import {
+  GET as synthesisGet,
   PATCH as synthesisPatch,
   POST as synthesisPost,
 } from "../src/app/api/synthesis/route";
 import { countWords, validateBridgeText } from "../src/lib/bridge/generate";
 import { getServerConfig } from "../src/lib/config";
+import { clearCachedDemoSynthesisForTests } from "../src/lib/db/repository";
 import {
   generateInteraction,
   setGeminiTransportForTests,
@@ -159,6 +161,40 @@ async function runVerification(): Promise<void> {
   assert.equal(fallbackRes.modelUsed, cfg.modelFastFallback);
   assert.equal(overloadCalls, 4); // 3 primary attempts (initial + 2 retries) + 1 fallback
   console.log("   [PASS] 503 backoff retry -> fallback model verified.");
+
+  // 2b. Verify Synthesis Timeout + 1 Retry + Hydrogen Fallback
+  let timeoutCallSequence: string[] = [];
+  setGeminiTransportForTests(async (params) => {
+    timeoutCallSequence.push(params.model);
+    if (params.model === cfg.modelDeep) {
+      return new Promise((_, reject) => {
+        params.signal?.addEventListener("abort", () => {
+          reject(new Error("Aborted due to timeout"));
+        });
+      });
+    }
+    return {
+      id: "ix_hydrogen_fallback",
+      text: "Hydrogen fallback succeeded after Argon timeout",
+    };
+  });
+  const timeoutFallbackRes = await generateInteraction({
+    caller: "verify.synthesis.timeoutFallback",
+    tier: "deep",
+    prompt: "test synthesis timeout",
+    timeoutMs: 80,
+    maxRetries: cfg.synthesisMaxRetries,
+    fallbackModel: cfg.synthesisFallbackModel,
+    fallbackThinkingLevel: "low",
+  });
+  assert.equal(timeoutFallbackRes.fallbackUsed, true);
+  assert.equal(timeoutFallbackRes.modelUsed, cfg.modelFast);
+  assert.deepEqual(timeoutCallSequence, [
+    cfg.modelDeep,
+    cfg.modelDeep,
+    cfg.modelFast,
+  ]);
+  console.log("   [PASS] Timeout + 1 retry -> gemini-4-hydrogen fallback verified.");
 
   // Install smart mock transport for full route & safety & IDK & Bridge & Synthesis tests
   let bridgeFirstDraftBad = true;
@@ -511,8 +547,10 @@ async function runVerification(): Promise<void> {
   assert.equal(blockedAnswer.status, 403);
   console.log("   [PASS] Server-enforced gap lock (403 before nextUnlockAt) verified.");
 
-  // 5. Verify T11 Demo Seed + T9 Day 5 + T10 Synthesis & Feedback
+  // 5. Verify T11 Demo Seed + T9 Day 5 + T10 Synthesis & Feedback + Cached Demo Replay
   console.log("5. Verifying T11 Demo Seed -> Day 5 -> T10 Pattern Map & Synthesis...");
+  await clearCachedDemoSynthesisForTests();
+  const synPromptCountBeforeFirstDemo = capturedSynthesisPrompts.length;
   const seedRes = await demoSeedPost(
     makeReq("/api/demo/seed", "POST", tokenB, {
       ageAttested18: true,
@@ -525,6 +563,11 @@ async function runVerification(): Promise<void> {
     makeReq("/api/synthesis", "POST", tokenB),
   );
   assert.equal(synRes.status, 200);
+  assert.equal(
+    capturedSynthesisPrompts.length,
+    synPromptCountBeforeFirstDemo + 1,
+    "First demo journey should generate synthesis and save to Firestore cache",
+  );
   const synData = (await synRes.json()) as {
     state: string;
     synthesis: {
@@ -586,8 +629,37 @@ async function runVerification(): Promise<void> {
     synthesis: { noneFitMe: boolean };
   };
   assert.equal(noneFitJson.synthesis.noneFitMe, true);
+
+  // Verify second seeded demo journey loads the saved Firestore result INSTANTLY with 0 Gemini calls
+  const tokenResC = await authSessionPost();
+  const { token: tokenC } = (await tokenResC.json()) as { token: string };
+  const seedResC = await demoSeedPost(
+    makeReq("/api/demo/seed", "POST", tokenC, {
+      ageAttested18: true,
+      includeDay5Answers: true,
+    }),
+  );
+  assert.equal(seedResC.status, 200);
+  const synPromptsBeforeCachedDemo = capturedSynthesisPrompts.length;
+  const cachedDemoGetRes = await synthesisGet(
+    makeReq("/api/synthesis", "GET", tokenC),
+  );
+  assert.equal(cachedDemoGetRes.status, 200);
+  const cachedDemoGetJson = (await cachedDemoGetRes.json()) as {
+    state: string;
+    synthesis: { insights: Array<{ id: string }> };
+  };
+  assert.equal(cachedDemoGetJson.state, "ready");
+  assert.ok(cachedDemoGetJson.synthesis.insights.length >= 3);
+  assert.equal(
+    capturedSynthesisPrompts.length,
+    synPromptsBeforeCachedDemo,
+    "Cached demo journey must load instantly from Firestore without calling Gemini live",
+  );
+  await clearCachedDemoSynthesisForTests();
+
   console.log(
-    `   [PASS] Demo seed + Day 5 Synthesis (${synWords} words, pre-Bridge multi-day quotes, alternative readings, None-fit option) verified.`,
+    `   [PASS] Demo seed + Day 5 Synthesis (${synWords} words, pre-Bridge multi-day quotes, alternative readings, None-fit option, and instant Firestore demo cache) verified.`,
   );
 
   setGeminiTransportForTests(null);

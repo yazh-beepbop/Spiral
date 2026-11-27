@@ -11,6 +11,7 @@
 
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import { getServerConfig } from "@/lib/config";
 import {
   type AnswerDoc,
   type BridgeDoc,
@@ -103,6 +104,7 @@ export async function detectJourneyPatterns(params: {
   answers: Array<AnswerDoc & { day: number }>;
   bridges: BridgeDoc[];
 }): Promise<PatternMapOutput> {
+  const config = getServerConfig();
   const safeAnswers = params.answers.filter((a) => !a.excludedFromAI);
   logInfo("patterns.detectJourneyPatterns", {
     safeAnswerCount: safeAnswers.length,
@@ -119,8 +121,12 @@ export async function detectJourneyPatterns(params: {
     {
       caller: "patterns.detect.day5",
       tier: "deep",
-      thinkingLevel: "high",
+      thinkingLevel: "medium",
       temperature: 0.25,
+      timeoutMs: config.synthesisTimeoutMs,
+      maxRetries: config.synthesisMaxRetries,
+      fallbackModel: config.synthesisFallbackModel,
+      fallbackThinkingLevel: "low",
       systemInstruction: PATTERN_MAP_SYSTEM_INSTRUCTION,
       prompt,
     },

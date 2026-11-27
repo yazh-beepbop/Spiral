@@ -77,6 +77,7 @@ export const JourneyDocSchema = z.object({
   currentDay: z.number().int().min(1).max(5),
   nextUnlockAt: z.string().nullable(),
   crisisType: CrisisTypeSchema.nullable(),
+  isDemoSeed: z.boolean().default(false),
   startedAt: z.string(),
   completedAt: z.string().nullable(),
 });
@@ -160,6 +161,14 @@ export const SynthesisDocSchema = z.object({
   createdAt: z.string(),
 });
 export type SynthesisDoc = z.infer<typeof SynthesisDocSchema>;
+
+export const DemoSynthesisCacheDocSchema = z.object({
+  crisisType: CrisisTypeSchema,
+  flags: z.array(PatternFlagDocSchema).min(1),
+  synthesis: SynthesisDocSchema,
+  updatedAt: z.string(),
+});
+export type DemoSynthesisCacheDoc = z.infer<typeof DemoSynthesisCacheDocSchema>;
 
 export const SafetyEventDocSchema = z.object({
   id: z.string().min(1),

@@ -339,6 +339,7 @@ export async function seedCareerFogDemoJourney(
     currentDay: 5,
     nextUnlockAt: null,
     status: "active",
+    isDemoSeed: true,
   });
 
   return {

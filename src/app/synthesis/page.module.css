@@ -260,6 +260,37 @@
   font-size: 0.925rem;
 }
 
+.retryCard {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.1rem;
+}
+
+.retryMessage {
+  margin: 0;
+  font-size: 0.985rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.retryButton {
+  padding: 0.7rem 1.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent-lavender);
+  background-color: var(--accent-lavender-soft);
+  color: var(--accent-lavender);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
 .footer {
   border-top: 1px solid var(--border-subtle);
   padding-top: 1.25rem;

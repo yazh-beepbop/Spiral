@@ -34,6 +34,9 @@ export interface ServerConfig {
   logLevel: LogLevel;
   geminiMaxRetries: number;
   geminiInitialBackoffMs: number;
+  synthesisTimeoutMs: number;
+  synthesisMaxRetries: number;
+  synthesisFallbackModel: string;
   bridgeMaxWords: number;
   synthesisMinWords: number;
   synthesisMaxWords: number;
@@ -110,11 +113,13 @@ export function getServerConfig(): ServerConfig {
     );
   }
 
+  const modelFast = process.env.MODEL_FAST?.trim() || "gemini-4-hydrogen";
+
   return {
     geminiApiKey: process.env.GEMINI_API_KEY ?? "",
     firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT ?? "",
     googleCloudProject: process.env.GOOGLE_CLOUD_PROJECT ?? "",
-    modelFast: process.env.MODEL_FAST?.trim() || "gemini-4-hydrogen",
+    modelFast,
     modelDeep: process.env.MODEL_DEEP?.trim() || "gemini-4-argon",
     modelFastFallback:
       process.env.MODEL_FAST_FALLBACK?.trim() || "gemini-3.8-flash",
@@ -125,6 +130,9 @@ export function getServerConfig(): ServerConfig {
     logLevel: parseLogLevel(process.env.LOG_LEVEL),
     geminiMaxRetries: 2,
     geminiInitialBackoffMs: 800,
+    synthesisTimeoutMs: 45_000,
+    synthesisMaxRetries: 1,
+    synthesisFallbackModel: modelFast,
     bridgeMaxWords: 40,
     synthesisMinWords: 500,
     synthesisMaxWords: 800,

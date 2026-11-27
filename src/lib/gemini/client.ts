@@ -39,6 +39,11 @@ export interface GeminiInteractionRequest {
   previousInteractionId?: string;
   responseMimeType?: string;
   responseJsonSchema?: Record<string, unknown>;
+  timeoutMs?: number;
+  maxRetries?: number;
+  primaryModelOverride?: string;
+  fallbackModel?: string;
+  fallbackThinkingLevel?: ThinkingDepth;
 }
 
 export interface GeminiInteractionResult {
@@ -61,6 +66,8 @@ export interface RawInteractionTransportParams {
   previousInteractionId?: string;
   responseMimeType?: string;
   responseJsonSchema?: Record<string, unknown>;
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface RawInteractionTransportResponse {
@@ -184,12 +191,51 @@ async function defaultInteractionTransport(
       ...(responseFormat ? { response_format: responseFormat } : {}),
     };
 
-  const interaction = await ai.interactions.create(createParams);
+  const interaction = await ai.interactions.create(createParams, {
+    ...(typeof params.timeoutMs === "number"
+      ? { timeout_ms: params.timeoutMs }
+      : {}),
+    ...(params.signal ? { signal: params.signal } : {}),
+  });
   const text = extractTextFromInteraction(interaction);
   return {
     id: interaction.id,
     text,
   };
+}
+
+/**
+ * Wraps a single transport attempt in a hard deadline (`timeoutMs`), aborting the signal
+ * and rejecting with HTTP-like status `408` if the call exceeds the allowed duration.
+ */
+async function executeWithTimeout<T>(
+  work: (signal: AbortSignal) => Promise<T>,
+  timeoutMs?: number,
+): Promise<T> {
+  const controller = new AbortController();
+  if (!timeoutMs || timeoutMs <= 0) {
+    return work(controller.signal);
+  }
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      const timeoutErr = Object.assign(
+        new Error(`Gemini interaction timed out after ${timeoutMs}ms`),
+        { status: 408 },
+      );
+      reject(timeoutErr);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([work(controller.signal), timeoutPromise]);
+  } finally {
+    if (timer !== null) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 /**
@@ -235,9 +281,12 @@ export function isRetryableOverloadError(error: unknown): boolean {
   if (error instanceof Error) {
     const lower = error.message.toLowerCase();
     return (
+      error.name === "RequestTimeoutError" ||
+      error.name === "AbortError" ||
       lower.includes("overloaded") ||
       lower.includes("unavailable") ||
       lower.includes("timed out") ||
+      lower.includes("timeout") ||
       lower.includes("econnreset")
     );
   }
@@ -277,17 +326,21 @@ export async function generateInteraction(
   }
 
   const primaryModel =
-    request.tier === "fast" ? config.modelFast : config.modelDeep;
+    request.primaryModelOverride ??
+    (request.tier === "fast" ? config.modelFast : config.modelDeep);
   const fallbackModel =
-    request.tier === "fast"
+    request.fallbackModel ??
+    (request.tier === "fast"
       ? config.modelFastFallback
-      : config.modelDeepFallback;
+      : config.modelDeepFallback);
 
   logInfo("gemini.generateInteraction.start", {
     caller: request.caller,
     tier: request.tier,
     primaryModel,
+    fallbackModel,
     thinkingLevel: request.thinkingLevel ?? "default",
+    timeoutMs: request.timeoutMs ?? null,
     promptChars: request.prompt.length,
   });
 
@@ -295,24 +348,31 @@ export async function generateInteraction(
   let totalAttempts = 0;
   let lastError: unknown = null;
 
-  const maxPrimaryAttempts = Math.max(1, config.geminiMaxRetries + 1);
+  const configuredRetries = request.maxRetries ?? config.geminiMaxRetries;
+  const maxPrimaryAttempts = Math.max(1, configuredRetries + 1);
 
   for (let attempt = 1; attempt <= maxPrimaryAttempts; attempt++) {
     totalAttempts += 1;
     const callStart = Date.now();
     try {
-      const response = await transport({
-        apiKey: config.geminiApiKey,
-        model: primaryModel,
-        prompt: request.prompt,
-        systemInstruction: request.systemInstruction,
-        thinkingLevel: request.thinkingLevel,
-        temperature: request.temperature,
-        maxOutputTokens: request.maxOutputTokens,
-        previousInteractionId: request.previousInteractionId,
-        responseMimeType: request.responseMimeType,
-        responseJsonSchema: request.responseJsonSchema,
-      });
+      const response = await executeWithTimeout(
+        (signal) =>
+          transport({
+            apiKey: config.geminiApiKey,
+            model: primaryModel,
+            prompt: request.prompt,
+            systemInstruction: request.systemInstruction,
+            thinkingLevel: request.thinkingLevel,
+            temperature: request.temperature,
+            maxOutputTokens: request.maxOutputTokens,
+            previousInteractionId: request.previousInteractionId,
+            responseMimeType: request.responseMimeType,
+            responseJsonSchema: request.responseJsonSchema,
+            timeoutMs: request.timeoutMs,
+            signal,
+          }),
+        request.timeoutMs,
+      );
 
       const durationMs = Date.now() - callStart;
       logGenAICall({
@@ -326,6 +386,7 @@ export async function generateInteraction(
           thinkingLevel: request.thinkingLevel,
           temperature: request.temperature,
           maxOutputTokens: request.maxOutputTokens,
+          timeoutMs: request.timeoutMs,
           responseMimeType: request.responseMimeType,
           hasSystemInstruction: Boolean(request.systemInstruction),
         },
@@ -357,6 +418,7 @@ export async function generateInteraction(
           maxPrimaryAttempts,
           status: getErrorStatus(error),
           retryable,
+          reason: error instanceof Error ? error.message : String(error),
         },
       );
 
@@ -370,13 +432,15 @@ export async function generateInteraction(
     }
   }
 
-  if (
-    fallbackModel &&
-    fallbackModel !== primaryModel &&
-    shouldAttemptFallbackModel(lastError)
-  ) {
+  const canSwitchToFallback = request.fallbackModel
+    ? Boolean(lastError)
+    : shouldAttemptFallbackModel(lastError);
+
+  if (fallbackModel && fallbackModel !== primaryModel && canSwitchToFallback) {
     totalAttempts += 1;
     const fallbackStart = Date.now();
+    const fallbackThinking =
+      request.fallbackThinkingLevel ?? request.thinkingLevel;
     logWarn(
       "gemini.generateInteraction.switchingToFallback",
       "Falling back to secondary model after primary failure",
@@ -384,22 +448,29 @@ export async function generateInteraction(
         caller: request.caller,
         primaryModel,
         fallbackModel,
+        fallbackThinkingLevel: fallbackThinking ?? "default",
       },
     );
 
     try {
-      const response = await transport({
-        apiKey: config.geminiApiKey,
-        model: fallbackModel,
-        prompt: request.prompt,
-        systemInstruction: request.systemInstruction,
-        thinkingLevel: request.thinkingLevel,
-        temperature: request.temperature,
-        maxOutputTokens: request.maxOutputTokens,
-        previousInteractionId: request.previousInteractionId,
-        responseMimeType: request.responseMimeType,
-        responseJsonSchema: request.responseJsonSchema,
-      });
+      const response = await executeWithTimeout(
+        (signal) =>
+          transport({
+            apiKey: config.geminiApiKey,
+            model: fallbackModel,
+            prompt: request.prompt,
+            systemInstruction: request.systemInstruction,
+            thinkingLevel: fallbackThinking,
+            temperature: request.temperature,
+            maxOutputTokens: request.maxOutputTokens,
+            previousInteractionId: request.previousInteractionId,
+            responseMimeType: request.responseMimeType,
+            responseJsonSchema: request.responseJsonSchema,
+            timeoutMs: request.timeoutMs,
+            signal,
+          }),
+        request.timeoutMs,
+      );
 
       const durationMs = Date.now() - fallbackStart;
       logGenAICall({
@@ -410,9 +481,10 @@ export async function generateInteraction(
         durationMs,
         config: {
           tier: request.tier,
-          thinkingLevel: request.thinkingLevel,
+          thinkingLevel: fallbackThinking,
           temperature: request.temperature,
           maxOutputTokens: request.maxOutputTokens,
+          timeoutMs: request.timeoutMs,
           responseMimeType: request.responseMimeType,
           hasSystemInstruction: Boolean(request.systemInstruction),
         },
@@ -533,15 +605,48 @@ export async function generateStructuredInteraction<T>(
   });
 
   const secondCheck = tryParseAndValidate(retryResult.text);
-  if (!secondCheck.ok) {
-    const err = new Error(
-      `Model output failed Zod validation after retry (${request.caller}): ${secondCheck.reason}`,
-    );
-    logError("gemini.generateStructuredInteraction.failed", err, {
-      caller: request.caller,
-    });
-    throw err;
+  if (secondCheck.ok) {
+    return { data: secondCheck.data, raw: retryResult };
   }
 
-  return { data: secondCheck.data, raw: retryResult };
+  if (
+    request.fallbackModel &&
+    retryResult.modelUsed !== request.fallbackModel
+  ) {
+    logWarn(
+      "gemini.generateStructuredInteraction.fallbackOnInvalidSchema",
+      "Primary model failed schema validation twice; falling back to secondary model",
+      {
+        caller: request.caller,
+        fallbackModel: request.fallbackModel,
+        reason: secondCheck.reason,
+      },
+    );
+
+    const fallbackStructured = await generateInteraction({
+      ...request,
+      caller: `${request.caller}:schemaFallback`,
+      primaryModelOverride: request.fallbackModel,
+      thinkingLevel: request.fallbackThinkingLevel ?? request.thinkingLevel,
+      maxRetries: 0,
+      responseMimeType: "application/json",
+      prompt: `${request.prompt}\n\nIMPORTANT: Return ONLY valid JSON matching the required schema (${secondCheck.reason}).`,
+    });
+
+    const fallbackCheck = tryParseAndValidate(fallbackStructured.text);
+    if (fallbackCheck.ok) {
+      return {
+        data: fallbackCheck.data,
+        raw: { ...fallbackStructured, fallbackUsed: true },
+      };
+    }
+  }
+
+  const err = new Error(
+    `Model output failed Zod validation after retry (${request.caller}): ${secondCheck.reason}`,
+  );
+  logError("gemini.generateStructuredInteraction.failed", err, {
+    caller: request.caller,
+  });
+  throw err;
 }
