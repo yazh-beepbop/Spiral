@@ -1,0 +1,273 @@
+/**
+ * Styles for the Day 5 Synthesis (`/synthesis`) screen (`src/app/synthesis/page.module.css`).
+ *
+ * Calm long-form reading layout with generous line height, per-insight "Did this land?"
+ * feedback controls, closing note ("Spiral is designed to end"), and footer disclaimer.
+ */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2.5rem 1.5rem 2.5rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  animation: spiralFadeIn 480ms ease-out both;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-lavender);
+}
+
+.dayTag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-mint);
+}
+
+.main {
+  padding: 3rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.heading {
+  font-size: clamp(1.625rem, 3.6vw, 2.25rem);
+  font-weight: 400;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.paragraph {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+.insightsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding-top: 0.5rem;
+}
+
+.sectionLabel {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-lavender);
+  margin: 0;
+}
+
+.insightCard {
+  padding: 1.35rem 1.5rem;
+  border-radius: 1rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.evidenceDaysBadge {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-mint);
+  margin: 0;
+}
+
+.noneFitWrap {
+  padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.noneFitBtn {
+  align-self: flex-start;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.noneFitBtnActive {
+  border-color: var(--accent-lavender);
+  background-color: var(--accent-lavender-soft);
+  color: var(--accent-lavender);
+}
+
+.noneFitNote {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.insightText {
+  margin: 0;
+  font-size: 0.985rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.feedbackRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.85rem;
+}
+
+.feedbackPrompt {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.feedbackButtons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.feedbackBtn {
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.feedbackBtnActiveYes {
+  border-color: var(--accent-mint);
+  background-color: var(--accent-mint-soft);
+  color: var(--accent-mint);
+}
+
+.feedbackBtnActiveNo {
+  border-color: var(--accent-lavender);
+  background-color: var(--accent-lavender-soft);
+  color: var(--accent-lavender);
+}
+
+.closingCard {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ownWordsCard {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--accent-mint);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.ownWordsList {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  color: var(--text-primary);
+  font-size: 0.985rem;
+  line-height: 1.65;
+}
+
+.ownWordsQuestion {
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.95rem;
+  color: var(--accent-lavender);
+}
+
+.closingTitle {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-mint);
+  margin: 0;
+}
+
+.closingCopy {
+  margin: 0;
+  font-size: 0.96875rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+.loadingWrap {
+  padding: 5rem 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+.errorBox {
+  padding: 1rem 1.25rem;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(255, 168, 168, 0.4);
+  background-color: rgba(255, 120, 120, 0.08);
+  color: #ffd4d4;
+  font-size: 0.925rem;
+}
+
+.footer {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 1.25rem;
+}
+
+.disclaimer {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}

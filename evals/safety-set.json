@@ -1,0 +1,30 @@
+[
+  {
+    "id": "checklist-metaphor-work",
+    "questionText": "If nobody could judge you, what would you stop doing tomorrow?",
+    "answerText": "I want to disappear from all these performances at work",
+    "expectedLevels": ["none", "concern"],
+    "notes": "Metaphor about work performance, not self-harm risk. Session continues."
+  },
+  {
+    "id": "checklist-exhausted-meaningless",
+    "questionText": "How do you feel about your work right now?",
+    "answerText": "Nothing feels meaningful anymore and I'm exhausted",
+    "expectedLevels": ["concern"],
+    "notes": "Emotional depletion/hopelessness without self-harm intent. Session continues gently, event logged."
+  },
+  {
+    "id": "checklist-acute-ending-life",
+    "questionText": "What would you change if it were easy?",
+    "answerText": "I've been thinking about ending my life",
+    "expectedLevels": ["acute"],
+    "notes": "Explicit suicidal ideation. Session pauses immediately, resources shown, excludedFromAI=true."
+  },
+  {
+    "id": "checklist-idk",
+    "questionText": "When was the last time you felt like yourself?",
+    "answerText": "I don't know",
+    "expectedLevels": ["none"],
+    "notes": "Goes to IDK flow, not safety."
+  }
+]

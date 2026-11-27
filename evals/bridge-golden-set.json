@@ -1,0 +1,137 @@
+[
+  {
+    "id": "benchmark-day-1",
+    "source": "spec_benchmark",
+    "day": 1,
+    "format": "pattern_observation",
+    "bridge": "You described your entire life without using the word 'enjoy' once. Was that deliberate, or did you just notice?",
+    "sampleAnswers": [
+      {
+        "qid": 1,
+        "questionText": "How do you feel about your work right now?",
+        "text": "Drained"
+      },
+      {
+        "qid": 4,
+        "questionText": "Describe a real Tuesday. Not ideal. Real.",
+        "text": "Wake at 7:30, check Slack in bed, standup, three status meetings, fix decks until 8pm, eat delivery on the couch, scroll until midnight."
+      }
+    ]
+  },
+  {
+    "id": "benchmark-day-2",
+    "source": "spec_benchmark",
+    "day": 2,
+    "format": "pattern_observation",
+    "bridge": "The things that make you feel most alive are the things you've stopped making time for. What replaced them, and why did you let it?",
+    "sampleAnswers": [
+      {
+        "qid": 7,
+        "questionText": "Think about the last three times you had genuine fun. What were you doing?",
+        "text": "Cooking for six friends from scratch, sketching street corners in my notebook, long cycling rides at 6am — all more than a year ago."
+      },
+      {
+        "qid": 10,
+        "questionText": "What activities outside work make you feel most alive?",
+        "text": "Making things with my hands, though lately weekends disappear into catching up on email and errands."
+      }
+    ]
+  },
+  {
+    "id": "benchmark-day-3",
+    "source": "spec_benchmark",
+    "day": 3,
+    "format": "pattern_observation",
+    "bridge": "You listed five worlds where you performed. Then whispered the one where you were real. Why does the real one get the smallest voice?",
+    "sampleAnswers": [
+      {
+        "qid": 12,
+        "questionText": "Which world (school, work, social) felt most like you? Which was the biggest performance?",
+        "text": "College placements, work leadership reviews, alumni dinners, LinkedIn, and extended-family weddings are all performances. Maybe late-night talks with my sister felt slightly like me."
+      }
+    ]
+  },
+  {
+    "id": "benchmark-day-4",
+    "source": "spec_benchmark",
+    "day": 4,
+    "format": "reframe_question",
+    "bridge": "You want to disappear from the performances. But you still want to be seen. Just not like this. What would 'being seen right' actually look like?",
+    "sampleAnswers": [
+      {
+        "qid": 19,
+        "questionText": "Rank these: autonomy, mastery, impact, recognition, belonging.",
+        "text": "1. autonomy, 2. mastery, 3. recognition, 4. impact, 5. belonging"
+      },
+      {
+        "qid": 22,
+        "questionText": "Does prestige feel good, or just useful?",
+        "text": "Useful as armor so nobody questions me, exhausting to maintain, yet I still care if people respect my craft."
+      }
+    ]
+  },
+  {
+    "id": "benchmark-day-5",
+    "source": "spec_benchmark",
+    "day": 5,
+    "format": "reframe_question",
+    "bridge": "What if the answer was never a career? What if it was a life, and the work just had to fit inside it?",
+    "sampleAnswers": [
+      {
+        "qid": 26,
+        "questionText": "Describe your ideal Monday morning. First three hours. Specific.",
+        "text": "Sunlight on a quiet table, coffee without notifications, walking to a small workshop, two hours writing or building before talking to anyone."
+      }
+    ]
+  },
+  {
+    "id": "benchmark-belief-any",
+    "source": "spec_benchmark",
+    "day": 2,
+    "format": "belief_challenge",
+    "bridge": "I notice you described rest as something you earn, not something you deserve. Where did that belief start?",
+    "sampleAnswers": [
+      {
+        "qid": 10,
+        "questionText": "What activities outside work make you feel most alive?",
+        "text": "Reading novels in the afternoon, though I only allow myself to do it once I've cleared every task and earned the downtime."
+      }
+    ]
+  },
+  {
+    "id": "leading-negative-isnt-it-true",
+    "source": "leading_question_negative",
+    "expectValid": false,
+    "day": 1,
+    "format": "pattern_observation",
+    "bridge": "Isn't it true that you keep taking these projects because you're afraid of disappointing everyone?",
+    "sampleAnswers": []
+  },
+  {
+    "id": "leading-negative-dont-you-think-label",
+    "source": "leading_question_negative",
+    "expectValid": false,
+    "day": 2,
+    "format": "pattern_observation",
+    "bridge": "Don't you think your people-pleasing is what really keeps your Tuesdays so crowded?",
+    "sampleAnswers": []
+  },
+  {
+    "id": "leading-negative-wouldnt-you-say",
+    "source": "leading_question_negative",
+    "expectValid": false,
+    "day": 3,
+    "format": "belief_challenge",
+    "bridge": "Wouldn't you say you're using gratitude to hide how resentful you actually feel?",
+    "sampleAnswers": []
+  },
+  {
+    "id": "leading-negative-deep-down",
+    "source": "leading_question_negative",
+    "expectValid": false,
+    "day": 4,
+    "format": "reframe_question",
+    "bridge": "Deep down, aren't you really scared of what happens if nobody needs you?",
+    "sampleAnswers": []
+  }
+]

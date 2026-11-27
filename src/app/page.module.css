@@ -1,0 +1,110 @@
+/**
+ * Styles for the Spiral Landing screen (`src/app/page.module.css`).
+ *
+ * Implements a calm, spacious single-screen layout with soft fade-in motion,
+ * mono small-caps labels, large readable Sora typography, and footer disclaimer.
+ */
+
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2.5rem 1.5rem 2rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  animation: spiralFadeIn 480ms ease-out both;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-lavender);
+}
+
+.cadence {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.main {
+  padding: 4rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-mint);
+  margin: 0;
+}
+
+.promise {
+  font-size: clamp(1.75rem, 4.2vw, 2.625rem);
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.subcopy {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-width: 36rem;
+  margin: 0;
+}
+
+.actions {
+  padding-top: 0.5rem;
+}
+
+.startButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.95rem 1.75rem;
+  border-radius: 999px;
+  background-color: var(--accent-lavender);
+  color: var(--bg-primary);
+  font-weight: 500;
+  font-size: 1rem;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.startButton:hover {
+  opacity: 0.92;
+}
+
+.startButton:focus-visible {
+  outline: 2px solid var(--accent-mint);
+  outline-offset: 4px;
+}
+
+.footer {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 1.25rem;
+}
+
+.disclaimer {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
