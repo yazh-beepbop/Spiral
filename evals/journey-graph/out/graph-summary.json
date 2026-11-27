@@ -1,0 +1,61 @@
+{
+  "generatedAtIso": "2026-11-27T22:36:01.410Z",
+  "totalJourneys": 45000,
+  "csvSha256": "2b6acfc768cffbe84f1f8508f756a0b857b8c68f00a889a27ac305649645b11c",
+  "notionNodeCounts": {
+    "trunkAndEntryNodes": 15,
+    "personas": 12,
+    "patternReferences": 30,
+    "engagementArcs": 10,
+    "safetyProtocols": 5,
+    "journeyClusters": 450,
+    "totalLinkedNodes": 522
+  },
+  "clusterCountsByProbabilityTier": {
+    "P1_Core": 120,
+    "P3_High_Risk_Edge": 150,
+    "P2_Common_Variant": 180
+  },
+  "journeysByTrunk": {
+    "career_fog": 15000,
+    "identity_crisis": 15000,
+    "life_transition": 15000
+  },
+  "journeysBySafetyTier": {
+    "Green · Clear Flow": 9000,
+    "Green-Check · Metaphor Disambiguated": 9000,
+    "Amber-Watch · Cumulative Concern": 9000,
+    "Red-Gate · Acute Pause & Exclude": 9000,
+    "Red-Resume · Post-Acute Grounding": 9000
+  },
+  "journeysByProbabilityTier": {
+    "P1_Core": 11550,
+    "P3_High_Risk_Edge": 14100,
+    "P2_Common_Variant": 19350
+  },
+  "journeysByRegionGroup": {
+    "India-First": 27350,
+    "Global-Diaspora": 17650
+  },
+  "journeysByCrisisType": {
+    "identity": 15350,
+    "existential": 6050,
+    "transition": 14300,
+    "burnout": 9300
+  },
+  "pruningAudit": {
+    "rawSixAxisCartesianCount": 720000,
+    "stage1CandidateCores": 1200,
+    "stage1RetainedArchetypes": 90,
+    "stage1PrunedCores": 1110,
+    "stage2CandidateClusterPersonaArcs": 54000,
+    "stage2RetainedJourneys": 45000,
+    "stage2PrunedPersonaArcs": 9000,
+    "pruningRulesApplied": [
+      "Rule P-1 (Affect-Crisis Coherence): Pruned unmasked Energized Day-1 states paired with Burnout or Existential crisis types unless performative/gratitude masking is active.",
+      "Rule P-2 (Trunk-Mechanism Alignment): Pruned low-relevance Trunk×Triad pairings so Career Fog, Identity Crisis, and Life Transition each retain their 30 highest-likelihood psychological cores.",
+      "Rule P-3 (Cultural-Persona Fit): Pruned mismatched Persona×Triad pairs (e.g., first-gen class-transition stress on pure golden-handcuffs pedigree personas; exam-placement dependency on mid-career returnee cohorts).",
+      "Rule P-4 (Behavioral-IDK Consistency): Pruned zero-IDK candid arcs on `avoidance_idk` triads and pruned 3-pass silent IDK exits on `performative_self_awareness` essayist triads."
+    ]
+  }
+}
