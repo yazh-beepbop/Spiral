@@ -1,0 +1,152 @@
+[
+  {
+    "id": "idk-plain-exact",
+    "category": "plain",
+    "qid": 2,
+    "questionText": "When was the last time you lost track of time? What were you doing?",
+    "answerText": "I don't know",
+    "expectedIsIdk": true,
+    "expectedType": "plain",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-plain-do-not-know",
+    "category": "plain",
+    "qid": 5,
+    "questionText": "What would you change if it were easy?",
+    "answerText": "Honestly I do not know.",
+    "expectedIsIdk": true,
+    "expectedType": "plain",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-plain-short",
+    "category": "plain",
+    "qid": 18,
+    "questionText": "When was the last time you felt like yourself?",
+    "answerText": "don't know",
+    "expectedIsIdk": true,
+    "expectedType": "plain",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-disguised-lol",
+    "category": "disguised",
+    "qid": 9,
+    "questionText": "What counts as fun at work? Be specific.",
+    "answerText": "idk lol",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-disguised-no-idea",
+    "category": "disguised",
+    "qid": 24,
+    "questionText": "What would you do for free that people would eventually pay for?",
+    "answerText": "no idea",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-disguised-nothing-really",
+    "category": "disguised",
+    "qid": 17,
+    "questionText": "If nobody could judge you, what would you stop doing tomorrow?",
+    "answerText": "nothing really",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-disguised-shrug-emoji",
+    "category": "disguised",
+    "qid": 27,
+    "questionText": "What would you bet on? Not the safe bet. The real one.",
+    "answerText": "🤷",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-disguised-single-word-dunno",
+    "category": "disguised",
+    "qid": 28,
+    "questionText": "What's the one thing you know you need to do but haven't done yet?",
+    "answerText": "dunno",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "idk-disguised-empty",
+    "category": "disguised",
+    "qid": 10,
+    "questionText": "What activities outside work make you feel most alive?",
+    "answerText": "   ",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": true
+  },
+  {
+    "id": "real-short-nothing-feels-fun",
+    "category": "real_short_answer",
+    "qid": 7,
+    "questionText": "Think about the last three times you had genuine fun. What were you doing?",
+    "answerText": "Nothing. Honestly nothing feels fun.",
+    "expectedIsIdk": false,
+    "expectedType": "real_short_answer",
+    "expectZeroModelCalls": false
+  },
+  {
+    "id": "real-short-sister",
+    "category": "real_short_answer",
+    "qid": 15,
+    "questionText": "Who would you still talk to if you lived in total isolation? Why them?",
+    "answerText": "My sister, she never makes me perform.",
+    "expectedIsIdk": false,
+    "expectedType": "real_short_answer",
+    "expectZeroModelCalls": false
+  },
+  {
+    "id": "real-short-just-useful",
+    "category": "real_short_answer",
+    "qid": 22,
+    "questionText": "Does prestige feel good, or just useful?",
+    "answerText": "Just useful.",
+    "expectedIsIdk": false,
+    "expectedType": "real_short_answer",
+    "expectZeroModelCalls": false
+  },
+  {
+    "id": "sarcastic-dodge-app",
+    "category": "sarcastic",
+    "qid": 25,
+    "questionText": "What's the one move with low downside and huge upside that you've been avoiding?",
+    "answerText": "If I knew that I wouldn't be on this app lol",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": false
+  },
+  {
+    "id": "sarcastic-dodge-astrologer",
+    "category": "sarcastic",
+    "qid": 21,
+    "questionText": "Imagine being privately, quietly proud five years from now. First image. Don't think.",
+    "answerText": "Ask my family astrologer, clearly nobody asked me.",
+    "expectedIsIdk": true,
+    "expectedType": "disguised",
+    "expectZeroModelCalls": false
+  },
+  {
+    "id": "sarcastic-real-answer-slack",
+    "category": "sarcastic",
+    "qid": 9,
+    "questionText": "What counts as fun at work? Be specific.",
+    "answerText": "Closing 38 pointless Jira tickets at 7pm so nobody pings me.",
+    "expectedIsIdk": false,
+    "expectedType": "real_short_answer",
+    "expectZeroModelCalls": true
+  }
+]

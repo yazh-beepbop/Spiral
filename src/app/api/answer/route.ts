@@ -226,11 +226,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
 
       // 2. IDK CHECK (runs ONLY after safety check has passed the answer)
+      const step2RotationIndex = Object.values(session.idkCounts).filter(
+        (c) => c >= 2,
+      ).length;
       const idkDecision = await evaluateIdkEscalation({
         question: currentQuestion,
         answerText: text,
         priorIdkCount,
         idkMode: journey.idkMode,
+        safetyLevel: safetyResult.level,
+        step2RotationIndex,
+        personId,
       });
 
       if (idkDecision.action === "redirect") {

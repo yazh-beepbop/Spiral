@@ -242,14 +242,23 @@ async function runVerification(): Promise<void> {
       };
     }
 
-    // IDK detector
+    // IDK detector & smaller-question redirect
     if (params.systemInstruction?.includes("isIdk")) {
       const isAvoidant = /not sure what to say here/i.test(params.prompt);
       return {
         id: "ix_idk",
         text: JSON.stringify({
           isIdk: isAvoidant,
-          variant: isAvoidant ? "close_variant" : "substantive_answer",
+          type: isAvoidant ? "disguised" : "real_short_answer",
+        }),
+      };
+    }
+    if (params.systemInstruction?.includes("smaller, more concrete version")) {
+      return {
+        id: "ix_idk_smaller",
+        text: JSON.stringify({
+          redirect:
+            "What was one ordinary task this week where twenty minutes passed without you checking the clock?",
         }),
       };
     }
@@ -450,11 +459,11 @@ async function runVerification(): Promise<void> {
   assert.equal(idk3Json.action, "next_question");
   assert.equal(
     idk3Json.idkExitMessage,
-    "It's fine not to know. We can move on.",
+    "Okay. We'll leave that one open.",
   );
   assert.equal(idk3Json.question.qid, 3);
   console.log(
-    "   [PASS] 3x IDK escalation + 'It\\'s fine not to know. We can move on.' exit verified.",
+    "   [PASS] 3x IDK escalation + 'Okay. We\\'ll leave that one open.' exit verified.",
   );
 
   // Q3: Checklist metaphor case ("I want to disappear from all these performances at work") -> continues
