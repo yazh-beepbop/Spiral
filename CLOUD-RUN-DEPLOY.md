@@ -43,7 +43,7 @@ gcloud run deploy spiral \
   --source . \
   --region asia-south1 \
   --allow-unauthenticated \
-  --update-secrets="/secrets/gemini_key=GEMINI_API_KEY:latest" \
+  --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest" \
   --set-env-vars="GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID,GAP_MINUTES=2,DEMO_MODE=true,LOG_LEVEL=info"
 ```
 
