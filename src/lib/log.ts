@@ -164,14 +164,23 @@ export function stripInlineData(value: unknown, depth = 0): unknown {
     if (typeof process !== "undefined" && value === process.env) {
       return "[REDACTED_PROCESS_ENV]";
     }
+    const rawObj = value as Record<string, unknown>;
+    const isAudioOrMediaBlock =
+      rawObj.type === "audio" ||
+      (typeof rawObj.mime_type === "string" &&
+        rawObj.mime_type.startsWith("audio/")) ||
+      (typeof rawObj.mimeType === "string" &&
+        rawObj.mimeType.startsWith("audio/"));
+
     const sanitized: Record<string, unknown> = {};
-    for (const [key, nested] of Object.entries(
-      value as Record<string, unknown>,
-    )) {
+    for (const [key, nested] of Object.entries(rawObj)) {
       const normalizedKey = key.toLowerCase().replace(/[^a-z0-9_]/g, "");
       if (SECRET_KEYS.has(normalizedKey)) {
         sanitized[key] = "[REDACTED]";
-      } else if (INLINE_DATA_KEYS.has(normalizedKey)) {
+      } else if (
+        INLINE_DATA_KEYS.has(normalizedKey) ||
+        (isAudioOrMediaBlock && normalizedKey === "data")
+      ) {
         sanitized[key] = "[STRIPPED_INLINE_DATA]";
       } else {
         sanitized[key] = stripInlineData(nested, depth + 1);

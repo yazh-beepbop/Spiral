@@ -15,8 +15,10 @@ import { z } from "zod";
 import {
   createCareerFogJourney,
   getLatestJourney,
+  updateJourney,
   upsertPerson,
 } from "@/lib/db/repository";
+import { SupportedLanguageSchema } from "@/lib/db/schema";
 import {
   UnauthorizedError,
   verifyRequestPersonId,
@@ -30,6 +32,7 @@ const StartJourneyBodySchema = z.object({
     }),
   }),
   entryPoint: z.literal("career_fog").default("career_fog"),
+  language: SupportedLanguageSchema.optional(),
   country: z.string().min(2).max(8).optional(),
   forceNew: z.boolean().optional(),
 });
@@ -56,37 +59,49 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    await upsertPerson(personId, {
+    const personDoc = await upsertPerson(personId, {
       country: parsed.data.country ?? "IN",
+      ...(parsed.data.language ? { language: parsed.data.language } : {}),
     });
+    const chosenLanguage = parsed.data.language ?? personDoc.language ?? "en";
 
     if (!parsed.data.forceNew) {
       const existing = await getLatestJourney(personId);
       if (existing && (existing.status === "active" || existing.status === "paused")) {
+        const syncedJourney =
+          parsed.data.language && existing.language !== parsed.data.language
+            ? await updateJourney(personId, existing.id, {
+                language: parsed.data.language,
+              })
+            : existing;
         logInfo("api.journey.start.resumedExisting", {
-          journeyId: existing.id,
-          status: existing.status,
-          currentDay: existing.currentDay,
+          journeyId: syncedJourney.id,
+          status: syncedJourney.status,
+          currentDay: syncedJourney.currentDay,
+          language: syncedJourney.language,
         });
         return NextResponse.json({
-          journeyId: existing.id,
-          status: existing.status,
-          currentDay: existing.currentDay,
+          journeyId: syncedJourney.id,
+          status: syncedJourney.status,
+          currentDay: syncedJourney.currentDay,
+          language: syncedJourney.language,
           resumed: true,
         });
       }
     }
 
-    const { journey } = await createCareerFogJourney(personId);
+    const { journey } = await createCareerFogJourney(personId, chosenLanguage);
     logInfo("api.journey.start.created", {
       journeyId: journey.id,
       entryPoint: journey.entryPoint,
+      language: journey.language,
     });
 
     return NextResponse.json({
       journeyId: journey.id,
       status: journey.status,
       currentDay: journey.currentDay,
+      language: journey.language,
       resumed: false,
     });
   } catch (error: unknown) {

@@ -11,6 +11,7 @@
 import { listJourneyAnswers, updateSession } from "@/lib/db/repository";
 import type { SessionDoc } from "@/lib/db/schema";
 import { generateInteraction } from "@/lib/gemini/client";
+import { getTranslations, type SupportedLanguage } from "@/lib/i18n";
 import {
   ADAPTIVE_SYSTEM_INSTRUCTION,
   buildAdaptiveQuestionPrompt,
@@ -18,12 +19,6 @@ import {
 } from "@/lib/journey/adaptive-prompt";
 import { validateNonLeadingQuestion } from "@/lib/journey/leading-guard";
 import { logError, logInfo, logWarn } from "@/lib/log";
-
-const FALLBACK_ADAPTIVE_TEXT: Record<number, string> = {
-  11: "When you place your real Tuesday next to the last time you lost track of time, what stands out to you first?",
-  16: "Between the moments you said give you energy and the parts that feel like a performance, what do you imagine changes if you stopped performing?",
-  23: "Looking at your five-year pride image alongside how last week unfolded, what sits between the two right now?",
-};
 
 /**
  * Normalizes single-line model question output.
@@ -36,7 +31,8 @@ function sanitizeQuestionLine(raw: string): string {
 }
 
 /**
- * Returns or generates, validates (non-leading & open), and caches the adaptive L3 question text.
+ * Returns or generates, validates (non-leading & open), and caches the adaptive L3 question text
+ * for the requested `language`.
  */
 export async function resolveAdaptiveQuestionText(params: {
   personId: string;
@@ -44,18 +40,31 @@ export async function resolveAdaptiveQuestionText(params: {
   day: number;
   qid: number;
   session: SessionDoc;
+  language?: SupportedLanguage;
 }): Promise<string> {
-  const { personId, journeyId, day, qid, session } = params;
-  const key = String(qid);
+  const {
+    personId,
+    journeyId,
+    day,
+    qid,
+    session,
+    language = "en",
+  } = params;
+  const cacheKey = language === "en" ? String(qid) : `${qid}_${language}`;
+  const legacyKey = String(qid);
 
-  if (session.adaptiveQuestions[key]) {
-    return session.adaptiveQuestions[key];
+  if (session.adaptiveQuestions[cacheKey]) {
+    return session.adaptiveQuestions[cacheKey];
+  }
+  if (language === "en" && session.adaptiveQuestions[legacyKey]) {
+    return session.adaptiveQuestions[legacyKey];
   }
 
   logInfo("adaptive.resolveAdaptiveQuestionText", {
     journeyId,
     day,
     qid,
+    language,
     promptVersion: PROMPT_VERSION,
   });
 
@@ -63,11 +72,17 @@ export async function resolveAdaptiveQuestionText(params: {
     excludeFlaggedSafety: true,
   });
 
-  let generatedText = FALLBACK_ADAPTIVE_TEXT[qid] ?? FALLBACK_ADAPTIVE_TEXT[11];
+  const fallbacks = getTranslations(language).adaptiveFallbacks;
+  let generatedText =
+    fallbacks[qid as 11 | 16 | 23] ?? fallbacks[11];
 
   if (safeAnswers.length > 0) {
     try {
-      const basePrompt = buildAdaptiveQuestionPrompt(qid, safeAnswers);
+      const basePrompt = buildAdaptiveQuestionPrompt(
+        qid,
+        safeAnswers,
+        language,
+      );
       const first = await generateInteraction({
         caller: `adaptive.qid_${qid}.attempt_1`,
         tier: "deep",
@@ -82,7 +97,7 @@ export async function resolveAdaptiveQuestionText(params: {
         requireOpenQuestion: true,
       });
 
-      if (candidate1.length >= 12 && check1.valid) {
+      if (candidate1.length >= 10 && check1.valid) {
         generatedText = candidate1;
       } else {
         logWarn(
@@ -90,6 +105,7 @@ export async function resolveAdaptiveQuestionText(params: {
           "Adaptive draft failed non-leading/open check; retrying once",
           {
             qid,
+            language,
             reasons: check1.reasons,
           },
         );
@@ -100,14 +116,14 @@ export async function resolveAdaptiveQuestionText(params: {
           thinkingLevel: "medium",
           temperature: 0.3,
           systemInstruction: ADAPTIVE_SYSTEM_INSTRUCTION,
-          prompt: `${basePrompt}\n\nCRITICAL CORRECTION: Your previous question ("${candidate1}") failed neutrality rules: ${check1.reasons.join(" ")} Rewrite it as a completely open, neutral question starting with What, How, Where, or When, using ONLY feelings/words the person already expressed.`,
+          prompt: `${basePrompt}\n\nCRITICAL CORRECTION: Your previous question ("${candidate1}") failed neutrality rules: ${check1.reasons.join(" ")} Rewrite it in the requested language as a completely open, neutral question using ONLY feelings/words the person already expressed.`,
         });
 
         const candidate2 = sanitizeQuestionLine(retry.text);
         const check2 = validateNonLeadingQuestion(candidate2, {
           requireOpenQuestion: true,
         });
-        if (candidate2.length >= 12 && check2.valid) {
+        if (candidate2.length >= 10 && check2.valid) {
           generatedText = candidate2;
         }
       }
@@ -116,6 +132,7 @@ export async function resolveAdaptiveQuestionText(params: {
         journeyId,
         day,
         qid,
+        language,
       });
     }
   }
@@ -123,7 +140,7 @@ export async function resolveAdaptiveQuestionText(params: {
   await updateSession(personId, journeyId, day, {
     adaptiveQuestions: {
       ...session.adaptiveQuestions,
-      [key]: generatedText,
+      [cacheKey]: generatedText,
     },
   });
 

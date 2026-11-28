@@ -23,6 +23,7 @@ import type {
   SynthesisInsight,
 } from "@/lib/db/schema";
 import { generateStructuredInteraction } from "@/lib/gemini/client";
+import { getTranslations, type SupportedLanguage } from "@/lib/i18n";
 import { logInfo, logWarn } from "@/lib/log";
 import {
   findLeakedPatternLabels,
@@ -76,20 +77,25 @@ export function validateSynthesisOutput(
   insights: CandidateInsightForValidation[],
   minWords = 500,
   maxWords = 800,
+  language: SupportedLanguage = "en",
 ): SynthesisValidationResult {
+  const dict = getTranslations(language);
+  const altPrefix = dict.synthesis.alternativeReadingPrefix;
+  const effectiveMinWords = language === "ta" ? Math.min(minWords, 300) : minWords;
   logInfo("synthesis.validateSynthesisOutput", {
     textLength: text.length,
     insightCount: insights.length,
-    minWords,
+    minWords: effectiveMinWords,
     maxWords,
+    language,
   });
 
   const reasons: string[] = [];
   const wordCount = countWords(text);
 
-  if (wordCount < minWords || wordCount > maxWords) {
+  if (wordCount < effectiveMinWords || wordCount > maxWords) {
     reasons.push(
-      `Synthesis word count is ${wordCount}; must be between ${minWords} and ${maxWords} words.`,
+      `Synthesis word count is ${wordCount}; must be between ${effectiveMinWords} and ${maxWords} words.`,
     );
   }
 
@@ -130,9 +136,12 @@ export function validateSynthesisOutput(
         `Insight ${idx + 1} has ${quoteCount} quote(s); must quote at least 2 of the person's own answers in "..." quotation marks.`,
       );
     }
-    if (!/\bor\s+it\s+may\s+simply\s+be\s+that\b/i.test(insight.text)) {
+    const hasAltReading =
+      /\bor\s+it\s+may\s+simply\s+be\s+that\b/i.test(insight.text) ||
+      insight.text.toLowerCase().includes(altPrefix.toLowerCase());
+    if (!hasAltReading) {
       reasons.push(
-        `Insight ${idx + 1} is missing an explicit alternative reading ("Or it may simply be that...").`,
+        `Insight ${idx + 1} is missing an explicit alternative reading ("${altPrefix}...").`,
       );
     }
   });
@@ -162,14 +171,18 @@ export async function generateJourneySynthesis(params: {
   flags: PatternFlagDoc[];
   answers: Array<AnswerDoc & { day: number }>;
   bridges: BridgeDoc[];
+  language?: SupportedLanguage;
 }): Promise<GeneratedSynthesisOutput> {
   const config = getServerConfig();
+  const language = params.language ?? "en";
+  const dict = getTranslations(language);
   const safeAnswers = params.answers.filter((a) => !a.excludedFromAI);
 
   logInfo("synthesis.generateJourneySynthesis.start", {
     crisisType: params.crisisType,
     flagCount: params.flags.length,
     safeAnswerCount: safeAnswers.length,
+    language,
     promptVersion: PROMPT_VERSION,
   });
 
@@ -178,6 +191,7 @@ export async function generateJourneySynthesis(params: {
     flags: params.flags,
     answers: safeAnswers,
     bridges: params.bridges,
+    language,
   });
 
   const first = await generateStructuredInteraction(
@@ -201,6 +215,7 @@ export async function generateJourneySynthesis(params: {
     first.data.insights,
     config.synthesisMinWords,
     config.synthesisMaxWords,
+    language,
   );
 
   let chosenData = first.data;
@@ -247,10 +262,14 @@ Fix ALL of them:
   }
 
   const sanitizedText = stripLeakedPatternLabels(chosenData.text).trim();
+  const altPrefixLower = dict.synthesis.alternativeReadingPrefix.toLowerCase();
   const insights: SynthesisInsight[] = chosenData.insights.map((item, idx) => {
     let cleanInsight = stripLeakedPatternLabels(item.text).trim();
-    if (!/\bor\s+it\s+may\s+simply\s+be\s+that\b/i.test(cleanInsight)) {
-      cleanInsight = `${cleanInsight} Or it may simply be that this season of life has asked for steady practicality while you decide what comes next.`;
+    const hasAlt =
+      /\bor\s+it\s+may\s+simply\s+be\s+that\b/i.test(cleanInsight) ||
+      cleanInsight.toLowerCase().includes(altPrefixLower);
+    if (!hasAlt) {
+      cleanInsight = `${cleanInsight} ${dict.synthesis.fallbackAlternativeReading}`;
     }
     const uniqueDays = Array.from(new Set(item.evidenceDays)).sort(
       (a, b) => a - b,

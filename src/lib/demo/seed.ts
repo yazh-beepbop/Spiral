@@ -18,7 +18,7 @@ import {
   updateSession,
   upsertPerson,
 } from "@/lib/db/repository";
-import type { BridgeFormat } from "@/lib/db/schema";
+import type { BridgeFormat, SupportedLanguageCode } from "@/lib/db/schema";
 import { CAREER_FOG_QUESTIONS } from "@/lib/journey/questions";
 import { logInfo } from "@/lib/log";
 
@@ -254,15 +254,20 @@ const DEMO_BRIDGES: ReadonlyArray<{
  */
 export async function seedCareerFogDemoJourney(
   personId: string,
-  options: { includeDay5Answers?: boolean } = {},
+  options: {
+    includeDay5Answers?: boolean;
+    language?: SupportedLanguageCode;
+  } = {},
 ): Promise<{ journeyId: string; currentDay: number }> {
+  const language = options.language ?? "en";
   logInfo("demo.seedCareerFogDemoJourney", {
     personIdLen: personId.length,
     includeDay5Answers: Boolean(options.includeDay5Answers),
+    language,
   });
 
-  await upsertPerson(personId, { country: "IN" });
-  const { journey } = await createCareerFogJourney(personId);
+  await upsertPerson(personId, { country: "IN", language });
+  const { journey } = await createCareerFogJourney(personId, language);
 
   const entriesToSeed = options.includeDay5Answers
     ? [...DEMO_ANSWERS, ...DEMO_DAY5_OPTIONAL_ANSWERS]

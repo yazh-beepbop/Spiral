@@ -71,7 +71,11 @@ async function materializeCachedDemoSynthesisIfReady(
   journey: JourneyDoc,
   preloadedDay5Answers?: AnswerDoc[],
 ): Promise<SynthesisDoc | null> {
-  if (!journey.isDemoSeed || journey.currentDay < 5) {
+  if (
+    !journey.isDemoSeed ||
+    journey.currentDay < 5 ||
+    (journey.language && journey.language !== "en")
+  ) {
     return null;
   }
 
@@ -244,7 +248,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const flightKey = `${personId}:${journey.id}`;
+    const language = journey.language ?? "en";
+    const flightKey = `${personId}:${journey.id}:${language}`;
     let runningPromise = inFlightSyntheses.get(flightKey);
     if (!runningPromise) {
       runningPromise = (async (): Promise<SynthesisDoc> => {
@@ -254,10 +259,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           const bridge5 = await generateDayBridge({
             day: 5,
             answers: day5Answers,
+            language,
           });
           await saveBridge(personId, journey.id, {
             day: 5,
             text: bridge5.text,
+            language,
             format: bridge5.format,
             wordCount: bridge5.wordCount,
             model: bridge5.model,
@@ -289,6 +296,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           flags: patternMap.flags,
           answers: allAnswers,
           bridges: allBridges,
+          language,
         });
 
         const q29OwnPriorities =
@@ -296,6 +304,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
         const savedDoc = await saveSynthesis(personId, journey.id, {
           text: generated.text,
+          language,
           insights: generated.insights,
           ownPrioritiesText: q29OwnPriorities,
           noneFitMe: false,
@@ -303,7 +312,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           promptVersion: generated.promptVersion,
         });
 
-        if (journey.isDemoSeed) {
+        if (journey.isDemoSeed && language === "en") {
           await saveCachedDemoSynthesis({
             crisisType: patternMap.crisisType,
             flags: patternMap.flags,

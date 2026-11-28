@@ -36,6 +36,7 @@ import {
   SafetyEventDocSchema,
   type SessionDoc,
   SessionDocSchema,
+  type SupportedLanguageCode,
   type SynthesisDoc,
   SynthesisDocSchema,
 } from "@/lib/db/schema";
@@ -129,9 +130,16 @@ function normalizeTimestamps(raw: Record<string, unknown>): Record<string, unkno
  */
 export async function upsertPerson(
   personId: string,
-  params: { country?: string; anniversaryOptIn?: boolean } = {},
+  params: {
+    country?: string;
+    language?: SupportedLanguageCode;
+    anniversaryOptIn?: boolean;
+  } = {},
 ): Promise<PersonDoc> {
-  logInfo("db.upsertPerson", { personIdLen: personId.length });
+  logInfo("db.upsertPerson", {
+    personIdLen: personId.length,
+    language: params.language,
+  });
   const nowIso = new Date().toISOString();
 
   if (!isFirebaseAdminConfigured() && process.env.NODE_ENV !== "production") {
@@ -141,6 +149,7 @@ export async function upsertPerson(
       createdAt: existing?.createdAt ?? nowIso,
       ageAttested18: true,
       country: params.country ?? existing?.country ?? "IN",
+      language: params.language ?? existing?.language ?? "en",
       anniversaryOptIn:
         params.anniversaryOptIn ?? existing?.anniversaryOptIn ?? false,
     });
@@ -165,6 +174,10 @@ export async function upsertPerson(
     createdAt: (existingData?.createdAt as string | undefined) ?? nowIso,
     ageAttested18: true,
     country: params.country ?? (existingData?.country as string | undefined) ?? "IN",
+    language:
+      params.language ??
+      (existingData?.language as SupportedLanguageCode | undefined) ??
+      "en",
     anniversaryOptIn:
       params.anniversaryOptIn ??
       (existingData?.anniversaryOptIn as boolean | undefined) ??
@@ -202,14 +215,19 @@ export async function getPerson(personId: string): Promise<PersonDoc | null> {
  */
 export async function createCareerFogJourney(
   personId: string,
+  language: SupportedLanguageCode = "en",
 ): Promise<{ journey: JourneyDoc; session: SessionDoc }> {
-  logInfo("db.createCareerFogJourney", { personIdLen: personId.length });
+  logInfo("db.createCareerFogJourney", {
+    personIdLen: personId.length,
+    language,
+  });
   const nowIso = new Date().toISOString();
   const journeyId = `j_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
   const journey = JourneyDocSchema.parse({
     id: journeyId,
     entryPoint: "career_fog",
+    language,
     idkMode: "standard",
     status: "active",
     currentDay: 1,
@@ -350,6 +368,7 @@ export async function updateJourney(
     Pick<
       JourneyDoc,
       | "status"
+      | "language"
       | "currentDay"
       | "nextUnlockAt"
       | "crisisType"
@@ -524,7 +543,11 @@ export async function saveAnswer(
   personId: string,
   journeyId: string,
   day: number,
-  answer: Omit<AnswerDoc, "id" | "createdAt"> & { id?: string; createdAt?: string },
+  answer: Omit<AnswerDoc, "id" | "createdAt" | "language"> & {
+    id?: string;
+    createdAt?: string;
+    language?: SupportedLanguageCode;
+  },
 ): Promise<AnswerDoc> {
   const answerId =
     answer.id ??
@@ -534,6 +557,7 @@ export async function saveAnswer(
 
   const validated = AnswerDocSchema.parse({
     ...answer,
+    language: answer.language ?? "en",
     id: answerId,
     createdAt: answer.createdAt ?? new Date().toISOString(),
   });
@@ -544,6 +568,7 @@ export async function saveAnswer(
     day,
     qid: validated.qid,
     answerId: validated.id,
+    language: validated.language,
     textLength: validated.text.length,
     idkCount: validated.idkCount,
     idkFlagged: validated.idkFlagged,
@@ -658,10 +683,14 @@ export async function listJourneyAnswers(
 export async function saveBridge(
   personId: string,
   journeyId: string,
-  bridge: Omit<BridgeDoc, "createdAt"> & { createdAt?: string },
+  bridge: Omit<BridgeDoc, "createdAt" | "language"> & {
+    createdAt?: string;
+    language?: SupportedLanguageCode;
+  },
 ): Promise<BridgeDoc> {
   const validated = BridgeDocSchema.parse({
     ...bridge,
+    language: bridge.language ?? "en",
     createdAt: bridge.createdAt ?? new Date().toISOString(),
   });
   logInfo("db.saveBridge", {
@@ -807,11 +836,15 @@ export async function savePatternFlags(
 export async function saveSynthesis(
   personId: string,
   journeyId: string,
-  synthesis: Omit<SynthesisDoc, "createdAt"> & { createdAt?: string },
+  synthesis: Omit<SynthesisDoc, "createdAt" | "language"> & {
+    createdAt?: string;
+    language?: SupportedLanguageCode;
+  },
   markCompleted: JourneyStatus = "completed",
 ): Promise<SynthesisDoc> {
   const validated = SynthesisDocSchema.parse({
     ...synthesis,
+    language: synthesis.language ?? "en",
     createdAt: synthesis.createdAt ?? new Date().toISOString(),
   });
   logInfo("db.saveSynthesis", {

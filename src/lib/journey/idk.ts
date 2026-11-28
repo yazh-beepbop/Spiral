@@ -17,10 +17,11 @@
 import { z } from "zod";
 import type { IdkMode } from "@/lib/db/schema";
 import { generateStructuredInteraction } from "@/lib/gemini/client";
+import { getTranslations, type SupportedLanguage } from "@/lib/i18n";
 import type { QuestionDefinition } from "@/lib/journey/questions";
 import { logError, logInfo } from "@/lib/log";
 
-export const PROMPT_VERSION = "idk-v1.1";
+export const PROMPT_VERSION = "idk-v1.2";
 
 export const IDK_THIRD_PASS_EXIT_MESSAGE =
   "It's fine not to know. We can move on.";
@@ -38,9 +39,12 @@ const OBVIOUS_IDK_PATTERNS: readonly RegExp[] = [
   /^(?:nothing|none)\s+comes\s+to\s+mind\.?!?$/i,
   /^can'?t\s+think\s+of\s+(?:anything|one)\.?!?$/i,
   /^(?:dunno|beats\s+me|blank|drawing\s+a\s+blank|unsure|pass|move\s+on)\.?!?$/i,
+  /^(?:mujhe\s+)?(?:sach\s+mein\s+)?(?:pata\s+nahi|nahi\s+pata|koi\s+idea\s+nahi|kuch\s+samajh\s+nahi\s+aa\s+raha|samajh\s+nahi\s+aa\s+raha)\.?!?$/i,
+  /^(?:मुझे\s*)?(?:सच\s*में\s*)?(?:पता\s*नहीं|नहीं\s*पता|समझ\s*नहीं\s*आ\s*रहा|कोई\s*अंदाज़ा\s*नहीं|कुछ\s*नहीं\s*सूझ\s*रहा)[।.!?]*$/,
+  /^(?:எனக்குத்?\s*)?(?:தெரியவில்லை|தெரியல|புரியவில்லை|எதுவும்\s*தோன்றவில்லை)[.!?]*$/,
 ];
 
-const IDK_SYSTEM_INSTRUCTION = `Determine whether the person's response is an "I don't know" / blank / "no idea" non-answer vs a substantive attempt to answer the question.
+const IDK_SYSTEM_INSTRUCTION = `Determine whether the person's response (in English, Hinglish, Hindi, or Tamil) is an "I don't know" / blank / "no idea" / "pata nahi" / "पता नहीं" / "தெரியவில்லை" non-answer vs a substantive attempt to answer the question.
 Return JSON: {"isIdk": boolean, "variant": "exact" | "close_variant" | "substantive_answer"}
 Rules:
 - Mark "isIdk": true ONLY if the answer essentially says they don't know, have no idea, are drawing a blank, or ask to pass without giving an actual reflection.
@@ -127,28 +131,43 @@ export async function detectIdkAnswer(
  * Builds the first-IDK ("smaller version of the question") redirect message, prioritizing
  * question-specific redirects from `Design.md` Section 5 while keeping framing open.
  */
-function buildFirstIdkRedirect(question: QuestionDefinition): string {
-  if (question.idkRedirect && question.qid !== 27) {
-    return question.idkRedirect;
+function buildFirstIdkRedirect(
+  question: QuestionDefinition,
+  language: SupportedLanguage = "en",
+): string {
+  const dict = getTranslations(language);
+  const localizedQ = dict.questions[question.qid];
+  const customRedirect = localizedQ?.idkRedirect ?? question.idkRedirect;
+
+  if (customRedirect && question.qid !== 27) {
+    return customRedirect;
   }
 
   if (question.qid === 27) {
-    return "Let's make it smaller. Forget the five-year horizon — if you had one quiet Saturday a week to explore one small hunch, what would you spend it on?";
+    return dict.idk.qid27FirstRedirect;
   }
 
-  return `Let's make that smaller. Instead of the whole picture, what is one small, ordinary moment from the past few weeks connected to "${question.text}"?`;
+  const qText = localizedQ?.text ?? question.text;
+  return `${dict.idk.genericFirstRedirectPrefix}${qText}${dict.idk.genericFirstRedirectSuffix}`;
 }
 
 /**
  * Builds the second-IDK ("name the hesitation kindly") redirect message without embedding
  * unexpressed motives, and lets the person know they can move on cleanly if nothing comes up.
  */
-function buildSecondIdkRedirect(question: QuestionDefinition): string {
-  if (question.qid === 27 && question.idkRedirect) {
-    return question.idkRedirect;
+function buildSecondIdkRedirect(
+  question: QuestionDefinition,
+  language: SupportedLanguage = "en",
+): string {
+  const dict = getTranslations(language);
+  const localizedQ = dict.questions[question.qid];
+  const customRedirect = localizedQ?.idkRedirect ?? question.idkRedirect;
+
+  if (question.qid === 27 && customRedirect) {
+    return customRedirect;
   }
 
-  return "That's the second time 'I don't know' showed up here. Sometimes a pause sits right next to something hard to put into words — and sometimes the answer genuinely isn't ready yet. Take one unhurried look; if nothing comes up, we can move on cleanly.";
+  return dict.idk.genericSecondRedirect;
 }
 
 /**
@@ -160,12 +179,21 @@ export async function evaluateIdkEscalation(params: {
   answerText: string;
   priorIdkCount: number;
   idkMode: IdkMode;
+  language?: SupportedLanguage;
 }): Promise<IdkDecision> {
-  const { question, answerText, priorIdkCount, idkMode } = params;
+  const {
+    question,
+    answerText,
+    priorIdkCount,
+    idkMode,
+    language = "en",
+  } = params;
+  const dict = getTranslations(language);
   logInfo("idk.evaluateIdkEscalation", {
     qid: question.qid,
     priorIdkCount,
     idkMode,
+    language,
   });
 
   const isIdk = await detectIdkAnswer(question, answerText);
@@ -186,7 +214,7 @@ export async function evaluateIdkEscalation(params: {
       return {
         action: "redirect",
         idkCount: 1,
-        promptMessage: buildFirstIdkRedirect(question),
+        promptMessage: buildFirstIdkRedirect(question, language),
         canExitNextPass: true,
       };
     }
@@ -194,7 +222,7 @@ export async function evaluateIdkEscalation(params: {
       action: "accept",
       idkCount: nextCount,
       idkFlagged: true,
-      exitMessage: IDK_THIRD_PASS_EXIT_MESSAGE,
+      exitMessage: dict.idk.thirdPassExitMessage,
     };
   }
 
@@ -202,7 +230,7 @@ export async function evaluateIdkEscalation(params: {
     return {
       action: "redirect",
       idkCount: 1,
-      promptMessage: buildFirstIdkRedirect(question),
+      promptMessage: buildFirstIdkRedirect(question, language),
       canExitNextPass: false,
     };
   }
@@ -211,7 +239,7 @@ export async function evaluateIdkEscalation(params: {
     return {
       action: "redirect",
       idkCount: 2,
-      promptMessage: buildSecondIdkRedirect(question),
+      promptMessage: buildSecondIdkRedirect(question, language),
       canExitNextPass: true,
     };
   }
@@ -220,6 +248,6 @@ export async function evaluateIdkEscalation(params: {
     action: "accept",
     idkCount: nextCount,
     idkFlagged: true,
-    exitMessage: IDK_THIRD_PASS_EXIT_MESSAGE,
+    exitMessage: dict.idk.thirdPassExitMessage,
   };
 }

@@ -30,24 +30,29 @@ import {
   updateJourney,
   updateSession,
 } from "@/lib/db/repository";
+import { SupportedLanguageSchema } from "@/lib/db/schema";
 import {
   UnauthorizedError,
   verifyRequestPersonId,
 } from "@/lib/firebase/admin";
+import {
+  formatLocalizedOpenerQuestion,
+  getLocalizedDayMetadata,
+  getLocalizedQuestion,
+  getTranslations,
+} from "@/lib/i18n";
 import { resolveAdaptiveQuestionText } from "@/lib/journey/adaptive";
 import { evaluateGapLock } from "@/lib/journey/gap";
 import { evaluateIdkEscalation } from "@/lib/journey/idk";
-import {
-  formatOpenerQuestion,
-  getDayMetadata,
-  getQuestionsForDay,
-} from "@/lib/journey/questions";
+import { getQuestionsForDay } from "@/lib/journey/questions";
 import { logError, logInfo } from "@/lib/log";
 import { classifyAnswerSafety } from "@/lib/safety/classify";
 
 const AnswerRequestSchema = z.object({
   qid: z.number().int().positive(),
   text: z.string().trim().min(1, "Write even a few words before continuing.").max(6000),
+  language: SupportedLanguageSchema.optional(),
+  inputMode: z.enum(["text", "voice"]).default("text"),
 });
 
 /**
@@ -70,7 +75,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { qid, text } = parsed.data;
+    const { qid, text, language: requestedLang, inputMode } = parsed.data;
     const journey = await getLatestJourney(personId);
     if (!journey) {
       return NextResponse.json(
@@ -78,6 +83,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 404 },
       );
     }
+    const activeLanguage = requestedLang ?? journey.language ?? "en";
+    const dict = getTranslations(activeLanguage);
+    logInfo("api.answer.POST.context", {
+      qid,
+      language: activeLanguage,
+      inputMode,
+      textLength: text.length,
+    });
 
     if (journey.status === "paused") {
       return NextResponse.json(
@@ -132,7 +145,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const currentQuestion = scheduled[expectedIdx];
+    const baseQuestion = scheduled[expectedIdx];
+    const currentQuestion =
+      getLocalizedQuestion(baseQuestion.qid, activeLanguage) ?? baseQuestion;
     if (currentQuestion.qid !== qid) {
       return NextResponse.json(
         {
@@ -146,7 +161,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let questionSnapshot = currentQuestion.text;
     if (currentQuestion.qid === 6 && day >= 2) {
       const prevBridge = await getBridgeForDay(personId, journey.id, day - 1);
-      questionSnapshot = formatOpenerQuestion(prevBridge?.text ?? null);
+      questionSnapshot = formatLocalizedOpenerQuestion(
+        prevBridge?.text ?? null,
+        activeLanguage,
+      );
     } else if (currentQuestion.isAdaptive) {
       questionSnapshot = await resolveAdaptiveQuestionText({
         personId,
@@ -154,12 +172,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         day,
         qid: currentQuestion.qid,
         session,
+        language: activeLanguage,
       });
     }
 
     const priorIdkCount = session.idkCounts[String(qid)] ?? 0;
 
-    // 1. SAFETY FIRST — every answer is screened before anything else happens to it
+    // 1. SAFETY FIRST — every answer (typed or voice transcript) is screened before anything else happens to it
     const safetyResult = await classifyAnswerSafety({
       questionText: questionSnapshot,
       answerText: text,
@@ -171,6 +190,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         layer: currentQuestion.layer,
         questionText: questionSnapshot,
         text,
+        language: activeLanguage,
         idkCount: priorIdkCount,
         idkFlagged: false,
         safety: {
@@ -187,11 +207,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         answerPath,
         action: "journey_paused_resources_shown",
       });
-      await updateJourney(personId, journey.id, { status: "paused" });
+      await updateJourney(personId, journey.id, {
+        status: "paused",
+        language: activeLanguage,
+      });
 
       return NextResponse.json({
         action: "paused",
         redirectTo: "/paused",
+        language: activeLanguage,
       });
     }
 
@@ -201,6 +225,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       answerText: text,
       priorIdkCount,
       idkMode: journey.idkMode,
+      language: activeLanguage,
     });
 
     if (idkDecision.action === "redirect") {
@@ -225,18 +250,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         redirectPrompt: idkDecision.promptMessage,
         canExitNextPass: idkDecision.canExitNextPass,
         gentleCheckIn:
-          safetyResult.level === "concern"
-            ? "Take all the time you need here. There is no rush."
-            : null,
+          safetyResult.level === "concern" ? dict.session.gentleCheckInIdk : null,
       });
     }
 
-    // 3. SAVE FINAL SCREENED ANSWER
+    // 3. SAVE FINAL SCREENED ANSWER (original answer text + language code)
     const savedAnswer = await saveAnswer(personId, journey.id, day, {
       qid,
       layer: currentQuestion.layer,
       questionText: questionSnapshot,
       text,
+      language: activeLanguage,
       idkCount: idkDecision.idkCount,
       idkFlagged: idkDecision.idkFlagged,
       safety: {
@@ -246,6 +270,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       excludedFromAI: false,
     });
+
+    if (journey.language !== activeLanguage) {
+      await updateJourney(personId, journey.id, { language: activeLanguage });
+    }
 
     if (safetyResult.level === "concern") {
       await recordSafetyEvent(personId, {
@@ -267,12 +295,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({
         action: "day_complete",
         day,
+        language: activeLanguage,
         idkExitMessage: idkDecision.exitMessage,
       });
     }
 
-    const nextQuestion = scheduled[nextIdx];
-    const dayMeta = getDayMetadata(day);
+    const baseNextQuestion = scheduled[nextIdx];
+    const nextQuestion =
+      getLocalizedQuestion(baseNextQuestion.qid, activeLanguage) ??
+      baseNextQuestion;
+    const dayMeta = getLocalizedDayMetadata(day, activeLanguage);
     const refreshedSession = await getOrCreateSession(personId, journey.id, day);
 
     let nextText = nextQuestion.text;
@@ -283,21 +315,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         day,
         qid: nextQuestion.qid,
         session: refreshedSession,
+        language: activeLanguage,
       });
     }
 
     return NextResponse.json({
       action: "next_question",
       day,
+      language: activeLanguage,
       dayTitle: dayMeta.title,
       headerLabel: dayMeta.headerLabel,
       questionIndex: nextIdx,
       totalQuestions: scheduled.length,
       idkExitMessage: idkDecision.exitMessage,
       gentleCheckIn:
-        safetyResult.level === "concern"
-          ? "Thank you for being honest about how heavy things feel. Go gently on this next one."
-          : null,
+        safetyResult.level === "concern" ? dict.session.gentleCheckInNext : null,
       question: {
         qid: nextQuestion.qid,
         layer: nextQuestion.layer,

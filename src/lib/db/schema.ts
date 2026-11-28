@@ -20,6 +20,9 @@ import { z } from "zod";
 export const EntryPointSchema = z.enum(["career_fog"]);
 export type EntryPoint = z.infer<typeof EntryPointSchema>;
 
+export const SupportedLanguageSchema = z.enum(["en", "hinglish", "hi", "ta"]);
+export type SupportedLanguageCode = z.infer<typeof SupportedLanguageSchema>;
+
 export const IdkModeSchema = z.enum(["standard", "gentle"]);
 export type IdkMode = z.infer<typeof IdkModeSchema>;
 
@@ -65,6 +68,7 @@ export const PersonDocSchema = z.object({
   createdAt: z.string(),
   ageAttested18: z.literal(true),
   country: z.string().default("IN"),
+  language: SupportedLanguageSchema.default("en"),
   anniversaryOptIn: z.boolean().default(false),
 });
 export type PersonDoc = z.infer<typeof PersonDocSchema>;
@@ -72,6 +76,7 @@ export type PersonDoc = z.infer<typeof PersonDocSchema>;
 export const JourneyDocSchema = z.object({
   id: z.string().min(1),
   entryPoint: EntryPointSchema,
+  language: SupportedLanguageSchema.default("en"),
   idkMode: IdkModeSchema,
   status: JourneyStatusSchema,
   currentDay: z.number().int().min(1).max(5),
@@ -106,6 +111,7 @@ export const AnswerDocSchema = z.object({
   layer: QuestionLayerSchema,
   questionText: z.string().min(1),
   text: z.string(),
+  language: SupportedLanguageSchema.default("en"),
   idkCount: z.number().int().min(0),
   idkFlagged: z.boolean(),
   safety: AnswerSafetySchema,
@@ -117,6 +123,7 @@ export type AnswerDoc = z.infer<typeof AnswerDocSchema>;
 export const BridgeDocSchema = z.object({
   day: z.number().int().min(1).max(5),
   text: z.string().min(1),
+  language: SupportedLanguageSchema.default("en"),
   format: BridgeFormatSchema,
   wordCount: z.number().int().positive(),
   model: z.string(),
@@ -153,6 +160,7 @@ export type SynthesisInsight = z.infer<typeof SynthesisInsightSchema>;
 
 export const SynthesisDocSchema = z.object({
   text: z.string().min(1),
+  language: SupportedLanguageSchema.default("en"),
   insights: z.array(SynthesisInsightSchema).min(1),
   ownPrioritiesText: z.string().nullable().default(null),
   noneFitMe: z.boolean().default(false),

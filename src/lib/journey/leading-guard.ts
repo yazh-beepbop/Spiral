@@ -60,13 +60,25 @@ const LEADING_COERCIVE_PATTERNS: ReadonlyArray<{
     regex: /\badmit\s+that\s+you\b/i,
     reason: 'Uses confrontational hypothesis testing ("admit that you").',
   },
+  {
+    regex: /\b(?:kya\s+yeh\s+sach\s+nahi|aapko\s+nahi\s+lagta|dil\s+ke\s+andar\s+sach\s+toh)\b/i,
+    reason: "Contains Hinglish leading/coercive tag.",
+  },
+  {
+    regex: /(?:क्या\s*यह\s*सच\s*नहीं|आपको\s*नहीं\s*लगता|मन\s*ही\s*मन\s*आप\s*जानते)/,
+    reason: "Contains Hindi leading/coercive tag.",
+  },
+  {
+    regex: /(?:உண்மை\s*இல்லையா|உங்களுக்குத்?\s*தோன்றவில்லையா|மனதிற்குள்\s*உண்மையில்)/,
+    reason: "Contains Tamil leading/coercive tag.",
+  },
 ];
 
 const CLOSED_YES_NO_START =
   /^(?:are|is|was|were|do|does|did|have|has|had|can|could|will|would|should|isn'?t|aren'?t|don'?t|doesn'?t|didn'?t|haven'?t|wouldn'?t|couldn'?t)\s+(?:you|it|that|this|there|your)\b/i;
 
 const OPEN_INTERROGATIVE_WORD =
-  /\b(?:what|how|where|when|which|who|whose|why)\b/i;
+  /(?:\b(?:what|how|where|when|which|who|whose|why|kya|kaise|kaisa|kaisi|kahan|kab|kaun|kaunsa|kaunsi|kis|kisko|kyun|kyon)\b|क्या|कैसे|कैसा|कैसी|कहाँ|कहां|कब|कौन|किस|क्यों|என்ன|எப்படி|எங்கே|எப்போது|எது|எந்த|யார்|ஏன்)/i;
 
 export interface NonLeadingCheckResult {
   valid: boolean;

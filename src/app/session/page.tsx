@@ -2,21 +2,28 @@
  * Daily Session Screen (`src/app/session/page.tsx`).
  *
  * Feature overview & use cases:
- * - Implements `Design.md` Screen 3 (`Session`):
- *   1. Loads authoritative server state from `GET /api/session/current`
- *   2. Redirects automatically if locked (`/bridge`), paused (`/paused`), complete (`/synthesis`),
- *      or not yet started (`/start`)
- *   3. Presents strictly ONE question per screen with mono day header, progress dots,
- *      appropriate input (`choice`, `ranking`, `short`, `long`), and soft fade-in motion
- *   4. Displays Standard Mode `"I don't know"` redirects inline without losing focus
- *   5. Calls `POST /api/bridge` as soon as the day's final answer saves and routes to `/bridge`
+ * - Implements `Design.md` Screen 3 (`Session`) with full i18n (`en`, `hinglish`, `hi`, `ta`)
+ *   and stateless speech-to-text Voice Input (`VoiceMicButton`):
+ *   1. Loads authoritative server state from `GET /api/session/current` and refreshes
+ *      immediately if the visitor switches languages in `SettingsLanguageButton`
+ *   2. Presents strictly ONE question per screen with zero hardcoded strings
+ *   3. Places a tap-to-record / tap-to-stop `VoiceMicButton` next to every text answer box
+ *      (`short`, `long`, and Day 5 `QID 29` priority/step boxes) so transcribed speech is
+ *      inserted into the box for reading and editing before sending
+ *   4. Submits original answer text + `language` code through `POST /api/answer` (running
+ *      the exact same safety classifier on transcripts as typed text).
  */
 
 "use client";
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { APP_META } from "@/lib/config";
+import { SettingsLanguageButton } from "@/components/LanguagePicker";
+import {
+  LANGUAGE_CHANGED_EVENT,
+  useI18n,
+} from "@/components/LanguageProvider";
+import { VoiceMicButton } from "@/components/VoiceMicButton";
 import { authorizedFetch } from "@/lib/firebase/client";
 import { logError, logInfo } from "@/lib/log";
 import styles from "./page.module.css";
@@ -40,6 +47,7 @@ interface SessionCurrentResponse {
     | "ready_for_bridge"
     | "ready_for_synthesis"
     | "question";
+  language?: string;
   day?: number;
   headerLabel?: string;
   questionIndex?: number;
@@ -52,6 +60,7 @@ interface AnswerResponse {
   action?: "paused" | "idk_redirect" | "next_question" | "day_complete";
   state?: string;
   redirectTo?: string;
+  language?: string;
   idkCount?: number;
   redirectPrompt?: string;
   canExitNextPass?: boolean;
@@ -66,15 +75,29 @@ interface AnswerResponse {
 }
 
 /**
- * Renders the single-question-per-screen Spiral daily inquiry view.
+ * Appends a speech-to-text transcript cleanly onto an existing text field value.
+ */
+function appendTranscript(current: string, incoming: string): string {
+  const base = current.trim();
+  const next = incoming.trim();
+  if (!base) {
+    return next;
+  }
+  return `${base} ${next}`;
+}
+
+/**
+ * Renders the single-question-per-screen Spiral daily inquiry view with voice STT and i18n.
  */
 export default function SessionPage() {
   const router = useRouter();
+  const { language, syncLanguageFromServer, t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [writingBridge, setWritingBridge] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [usedVoiceForCurrent, setUsedVoiceForCurrent] = useState(false);
 
-  const [headerLabel, setHeaderLabel] = useState("DAY 1 · SURFACE MAPPING");
+  const [headerLabel, setHeaderLabel] = useState("");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(5);
   const [question, setQuestion] = useState<ActiveQuestionPayload | null>(null);
@@ -96,22 +119,32 @@ export default function SessionPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /**
-   * Resets answer input controls whenever a new question becomes active.
+   * Resets answer input controls whenever a new question becomes active (preserving draft text
+   * if the same QID was merely refreshed after a language switch).
    */
-  const applyNewQuestion = useCallback((nextQ: ActiveQuestionPayload) => {
-    setQuestion(nextQ);
-    setAnswerText("");
-    setSelectedChoice("");
-    setRankingOrder(nextQ.rankingItems ? [...nextQ.rankingItems] : []);
-    setPrioritiesRows([
-      { priority: "", step: "" },
-      { priority: "", step: "" },
-      { priority: "", step: "" },
-    ]);
-    setRedirectPrompt(null);
-    setCanExitThisPass(nextQ.priorIdkCount >= 2);
-    setErrorMessage(null);
-  }, []);
+  const applyNewQuestion = useCallback(
+    (nextQ: ActiveQuestionPayload, preserveDraftIfSameQid = false) => {
+      setQuestion((prev) => {
+        const sameQid = preserveDraftIfSameQid && prev?.qid === nextQ.qid;
+        if (!sameQid) {
+          setAnswerText("");
+          setSelectedChoice("");
+          setPrioritiesRows([
+            { priority: "", step: "" },
+            { priority: "", step: "" },
+            { priority: "", step: "" },
+          ]);
+          setUsedVoiceForCurrent(false);
+          setRedirectPrompt(null);
+        }
+        setRankingOrder(nextQ.rankingItems ? [...nextQ.rankingItems] : []);
+        setCanExitThisPass(nextQ.priorIdkCount >= 2);
+        setErrorMessage(null);
+        return nextQ;
+      });
+    },
+    [],
+  );
 
   /**
    * Requests end-of-day Bridge generation and navigates to `/bridge`.
@@ -126,23 +159,23 @@ export default function SessionPage() {
       }
       if (!res.ok) {
         const errData = (await res.json()) as { error?: string };
-        setErrorMessage(
-          errData.error ?? "Unable to write today's Bridge Question.",
-        );
+        setErrorMessage(errData.error ?? t.session.errBridgeFailed);
         setWritingBridge(false);
         return;
       }
       router.push("/bridge");
     } catch (error: unknown) {
       logError("SessionPage.finalizeDayBridge.failed", error);
-      setErrorMessage("Could not generate today's Bridge. Please try again.");
+      setErrorMessage(t.session.errBridgeRetry);
       setWritingBridge(false);
     }
-  }, [router]);
+  }, [router, t.session.errBridgeFailed, t.session.errBridgeRetry]);
 
-  useEffect(() => {
-    logInfo("SessionPage.mount");
-    const loadSession = async (): Promise<void> => {
+  /**
+   * Loads (or refreshes on language change) the active question from `/api/session/current`.
+   */
+  const loadSession = useCallback(
+    async (preserveDraft = false): Promise<void> => {
       try {
         const res = await authorizedFetch("/api/session/current", {
           method: "GET",
@@ -152,6 +185,10 @@ export default function SessionPage() {
           return;
         }
         const data = (await res.json()) as SessionCurrentResponse;
+        if (data.language && !preserveDraft) {
+          syncLanguageFromServer(data.language);
+        }
+
         switch (data.state) {
           case "no_journey":
             router.replace("/start");
@@ -171,10 +208,10 @@ export default function SessionPage() {
             return;
           case "question":
             if (data.question) {
-              setHeaderLabel(data.headerLabel ?? `DAY ${data.day ?? 1}`);
+              setHeaderLabel(data.headerLabel ?? "");
               setQuestionIndex(data.questionIndex ?? 0);
               setTotalQuestions(data.totalQuestions ?? 5);
-              applyNewQuestion(data.question);
+              applyNewQuestion(data.question, preserveDraft);
             }
             setLoading(false);
             return;
@@ -185,12 +222,33 @@ export default function SessionPage() {
           return;
         }
         logError("SessionPage.loadSession.failed", error);
-        setErrorMessage("Unable to load your session. Refresh to try again.");
+        setErrorMessage(t.session.errLoadSession);
         setLoading(false);
       }
+    },
+    [
+      applyNewQuestion,
+      finalizeDayBridge,
+      router,
+      syncLanguageFromServer,
+      t.session.errLoadSession,
+    ],
+  );
+
+  useEffect(() => {
+    logInfo("SessionPage.mount");
+    void loadSession(false);
+  }, [loadSession]);
+
+  useEffect(() => {
+    const onLanguageChanged = (): void => {
+      void loadSession(true);
     };
-    void loadSession();
-  }, [applyNewQuestion, finalizeDayBridge, router]);
+    window.addEventListener(LANGUAGE_CHANGED_EVENT, onLanguageChanged);
+    return () => {
+      window.removeEventListener(LANGUAGE_CHANGED_EVENT, onLanguageChanged);
+    };
+  }, [loadSession]);
 
   /**
    * Moves an item up or down in the QID 19 5-value ranking list.
@@ -229,7 +287,7 @@ export default function SessionPage() {
       return prioritiesRows
         .map(
           (r, idx) =>
-            `${idx + 1}. Priority: ${r.priority.trim()} — Next step: ${r.step.trim()}`,
+            `${idx + 1}. ${r.priority.trim()} — ${r.step.trim()}`,
         )
         .join("\n");
     }
@@ -237,7 +295,7 @@ export default function SessionPage() {
   };
 
   /**
-   * Submits the current answer (or an explicit third-pass IDK exit) to `POST /api/answer`.
+   * Submits the current answer (typed or voice-transcribed) + `language` to `POST /api/answer`.
    */
   const handleSubmit = async (overrideText?: string): Promise<void> => {
     if (!question || submitting || writingBridge) {
@@ -253,6 +311,8 @@ export default function SessionPage() {
     logInfo("SessionPage.handleSubmit", {
       qid: question.qid,
       charLength: submission.length,
+      language,
+      inputMode: usedVoiceForCurrent ? "voice" : "text",
     });
 
     try {
@@ -261,6 +321,8 @@ export default function SessionPage() {
         body: JSON.stringify({
           qid: question.qid,
           text: submission,
+          language,
+          inputMode: usedVoiceForCurrent ? "voice" : "text",
         }),
       });
 
@@ -278,7 +340,7 @@ export default function SessionPage() {
       }
 
       if (!res.ok) {
-        setErrorMessage(data.error ?? "Unable to save your answer.");
+        setErrorMessage(data.error ?? t.session.errSaveAnswer);
         setSubmitting(false);
         return;
       }
@@ -293,6 +355,7 @@ export default function SessionPage() {
         setCanExitThisPass(Boolean(data.canExitNextPass));
         setGentleCheckIn(data.gentleCheckIn ?? null);
         setAnswerText("");
+        setUsedVoiceForCurrent(false);
         setSubmitting(false);
         return;
       }
@@ -304,18 +367,16 @@ export default function SessionPage() {
       }
 
       if (data.action === "next_question" && data.question) {
-        setGentleCheckIn(
-          data.idkExitMessage ?? data.gentleCheckIn ?? null,
-        );
+        setGentleCheckIn(data.idkExitMessage ?? data.gentleCheckIn ?? null);
         setHeaderLabel(data.headerLabel ?? headerLabel);
         setQuestionIndex(data.questionIndex ?? questionIndex + 1);
         setTotalQuestions(data.totalQuestions ?? totalQuestions);
-        applyNewQuestion(data.question);
+        applyNewQuestion(data.question, false);
         setSubmitting(false);
       }
     } catch (error: unknown) {
       logError("SessionPage.handleSubmit.failed", error);
-      setErrorMessage("Connection interrupted. Your progress is safe — try again.");
+      setErrorMessage(t.session.errConnectionInterrupted);
       setSubmitting(false);
     }
   };
@@ -324,15 +385,14 @@ export default function SessionPage() {
     return (
       <div className={styles.page}>
         <header className={styles.topBar}>
-          <span className={styles.dayLabel}>SPIRAL</span>
+          <span className={styles.dayLabel}>{t.session.brandUpper}</span>
+          <SettingsLanguageButton />
         </header>
         <div className={styles.loadingWrap}>
-          {writingBridge
-            ? "Sitting with today's answers to write your Bridge..."
-            : "Opening today's session..."}
+          {writingBridge ? t.session.writingBridge : t.session.openingSession}
         </div>
         <footer className={styles.footer}>
-          <p className={styles.disclaimer}>{APP_META.disclaimer}</p>
+          <p className={styles.disclaimer}>{t.meta.disclaimer}</p>
         </footer>
       </div>
     );
@@ -344,16 +404,22 @@ export default function SessionPage() {
     <div className={styles.page}>
       <header className={styles.topBar}>
         <span className={styles.dayLabel}>{headerLabel}</span>
-        <div className={styles.dots} aria-label="Session progress">
-          {Array.from({ length: totalQuestions }).map((_, idx) => {
-            const dotClass =
-              idx < questionIndex
-                ? `${styles.dot} ${styles.dotDone}`
-                : idx === questionIndex
-                  ? `${styles.dot} ${styles.dotCurrent}`
-                  : styles.dot;
-            return <span key={idx} className={dotClass} />;
-          })}
+        <div className={styles.topBarRight}>
+          <div
+            className={styles.dots}
+            aria-label={t.session.progressAriaLabel}
+          >
+            {Array.from({ length: totalQuestions }).map((_, idx) => {
+              const dotClass =
+                idx < questionIndex
+                  ? `${styles.dot} ${styles.dotDone}`
+                  : idx === questionIndex
+                    ? `${styles.dot} ${styles.dotCurrent}`
+                    : styles.dot;
+              return <span key={idx} className={dotClass} />;
+            })}
+          </div>
+          <SettingsLanguageButton />
         </div>
       </header>
 
@@ -395,9 +461,7 @@ export default function SessionPage() {
 
           {question.format === "ranking" ? (
             <div className={styles.rankingList}>
-              <p className={styles.rankingHint}>
-                ORDER FROM MOST IMPORTANT (1) TO LEAST (5)
-              </p>
+              <p className={styles.rankingHint}>{t.session.rankingHint}</p>
               {rankingOrder.map((item, idx) => (
                 <div key={item} className={styles.rankingItem}>
                   <div className={styles.rankingLeft}>
@@ -409,7 +473,7 @@ export default function SessionPage() {
                       type="button"
                       className={styles.rankArrow}
                       disabled={idx === 0}
-                      aria-label={`Move ${item} up`}
+                      aria-label={`${t.session.moveUpAriaPrefix} ${item}`}
                       onClick={() => moveRankingItem(idx, -1)}
                     >
                       ↑
@@ -418,7 +482,7 @@ export default function SessionPage() {
                       type="button"
                       className={styles.rankArrow}
                       disabled={idx === rankingOrder.length - 1}
-                      aria-label={`Move ${item} down`}
+                      aria-label={`${t.session.moveDownAriaPrefix} ${item}`}
                       onClick={() => moveRankingItem(idx, 1)}
                     >
                       ↓
@@ -434,47 +498,94 @@ export default function SessionPage() {
               {prioritiesRows.map((row, idx) => (
                 <div key={idx} className={styles.priorityGroup}>
                   <span className={styles.priorityIndex}>
-                    Priority 0{idx + 1} · In your words
+                    {t.session.priorityGroupLabelPrefix} 0{idx + 1} ·{" "}
+                    {t.session.priorityInYourWordsSuffix}
                   </span>
-                  <input
-                    type="text"
-                    className={styles.priorityInput}
-                    placeholder={`Priority ${idx + 1}`}
-                    value={row.priority}
-                    onChange={(e) => {
-                      const next = [...prioritiesRows];
-                      next[idx] = { ...next[idx], priority: e.target.value };
-                      setPrioritiesRows(next);
-                    }}
-                  />
-                  <input
-                    type="text"
-                    className={styles.priorityInput}
-                    placeholder="One small next step"
-                    value={row.step}
-                    onChange={(e) => {
-                      const next = [...prioritiesRows];
-                      next[idx] = { ...next[idx], step: e.target.value };
-                      setPrioritiesRows(next);
-                    }}
-                  />
+                  <div className={styles.inputWithMicRow}>
+                    <input
+                      type="text"
+                      className={styles.priorityInput}
+                      placeholder={`${t.session.priorityPlaceholderPrefix} ${idx + 1}`}
+                      value={row.priority}
+                      onChange={(e) => {
+                        const next = [...prioritiesRows];
+                        next[idx] = { ...next[idx], priority: e.target.value };
+                        setPrioritiesRows(next);
+                      }}
+                    />
+                    <VoiceMicButton
+                      compact
+                      disabled={submitting}
+                      onTranscript={(spoken) => {
+                        setUsedVoiceForCurrent(true);
+                        setPrioritiesRows((prev) => {
+                          const next = [...prev];
+                          next[idx] = {
+                            ...next[idx],
+                            priority: appendTranscript(
+                              next[idx].priority,
+                              spoken,
+                            ),
+                          };
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
+                  <div className={styles.inputWithMicRow}>
+                    <input
+                      type="text"
+                      className={styles.priorityInput}
+                      placeholder={t.session.nextStepPlaceholder}
+                      value={row.step}
+                      onChange={(e) => {
+                        const next = [...prioritiesRows];
+                        next[idx] = { ...next[idx], step: e.target.value };
+                        setPrioritiesRows(next);
+                      }}
+                    />
+                    <VoiceMicButton
+                      compact
+                      disabled={submitting}
+                      onTranscript={(spoken) => {
+                        setUsedVoiceForCurrent(true);
+                        setPrioritiesRows((prev) => {
+                          const next = [...prev];
+                          next[idx] = {
+                            ...next[idx],
+                            step: appendTranscript(next[idx].step, spoken),
+                          };
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
           ) : null}
 
           {question.format === "short" || question.format === "long" ? (
-            <textarea
-              className={
-                question.format === "long"
-                  ? `${styles.textarea} ${styles.textareaLong}`
-                  : `${styles.textarea} ${styles.textareaShort}`
-              }
-              placeholder="Write honestly, in your own words..."
-              value={answerText}
-              onChange={(e) => setAnswerText(e.target.value)}
-              autoFocus
-            />
+            <div className={styles.answerBoxGroup}>
+              <textarea
+                className={
+                  question.format === "long"
+                    ? `${styles.textarea} ${styles.textareaLong}`
+                    : `${styles.textarea} ${styles.textareaShort}`
+                }
+                placeholder={t.session.textareaPlaceholder}
+                value={answerText}
+                onChange={(e) => setAnswerText(e.target.value)}
+                autoFocus
+              />
+              <VoiceMicButton
+                disabled={submitting}
+                onTranscript={(spoken) => {
+                  setUsedVoiceForCurrent(true);
+                  setAnswerText((prev) => appendTranscript(prev, spoken));
+                }}
+              />
+            </div>
           ) : null}
 
           {errorMessage ? (
@@ -490,7 +601,7 @@ export default function SessionPage() {
               disabled={!canSubmit}
               onClick={() => void handleSubmit()}
             >
-              {submitting ? "Listening..." : "Continue"}
+              {submitting ? t.session.listeningBtn : t.session.continueBtn}
             </button>
 
             {canExitThisPass ? (
@@ -500,7 +611,7 @@ export default function SessionPage() {
                 disabled={submitting}
                 onClick={() => void handleSubmit("I don't know")}
               >
-                It&apos;s fine not to know. We can move on.
+                {t.session.idkExitBtn}
               </button>
             ) : null}
           </div>
@@ -508,7 +619,7 @@ export default function SessionPage() {
       ) : null}
 
       <footer className={styles.footer}>
-        <p className={styles.disclaimer}>{APP_META.disclaimer}</p>
+        <p className={styles.disclaimer}>{t.meta.disclaimer}</p>
       </footer>
     </div>
   );

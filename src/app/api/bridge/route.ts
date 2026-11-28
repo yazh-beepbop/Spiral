@@ -112,14 +112,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    const language = journey.language ?? "en";
     const generated = await generateDayBridge({
       day,
       answers: todaysAnswers,
+      language,
     });
 
     const savedBridge = await saveBridge(personId, journey.id, {
       day,
       text: generated.text,
+      language,
       format: generated.format,
       wordCount: generated.wordCount,
       model: generated.model,

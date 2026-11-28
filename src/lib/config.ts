@@ -37,6 +37,8 @@ export interface ServerConfig {
   synthesisTimeoutMs: number;
   synthesisMaxRetries: number;
   synthesisFallbackModel: string;
+  voiceTranscribeTimeoutMs: number;
+  maxVoiceAudioBytes: number;
   bridgeMaxWords: number;
   synthesisMinWords: number;
   synthesisMaxWords: number;
@@ -133,6 +135,8 @@ export function getServerConfig(): ServerConfig {
     synthesisTimeoutMs: 45_000,
     synthesisMaxRetries: 1,
     synthesisFallbackModel: modelFast,
+    voiceTranscribeTimeoutMs: 30_000,
+    maxVoiceAudioBytes: 10 * 1024 * 1024,
     bridgeMaxWords: 40,
     synthesisMinWords: 500,
     synthesisMaxWords: 800,

@@ -20,10 +20,15 @@ import type {
   CrisisType,
   PatternFlagDoc,
 } from "@/lib/db/schema";
+import {
+  buildGeminiLanguageDirective,
+  getTranslations,
+  type SupportedLanguage,
+} from "@/lib/i18n";
 import { logInfo } from "@/lib/log";
 import { extractDayFromAnswerPath } from "@/lib/patterns/detect";
 
-export const PROMPT_VERSION = "synthesis-v1.2";
+export const PROMPT_VERSION = "synthesis-v1.3";
 
 export const SYNTHESIS_SYSTEM_INSTRUCTION = `You write the closing Day 5 reflection for Spiral.
 Spiral is a calm, logical, unbiased anchor — a clarity guide, not a chatbot or companion.
@@ -75,12 +80,18 @@ export function buildSynthesisPrompt(params: {
   flags: PatternFlagDoc[];
   answers: Array<AnswerDoc & { day: number }>;
   bridges: BridgeDoc[];
+  language?: SupportedLanguage;
 }): string {
-  const { crisisType, flags, answers, bridges } = params;
+  const { crisisType, flags, answers, bridges, language = "en" } = params;
+  const dict = getTranslations(language);
+  const altPrefix = dict.synthesis.alternativeReadingPrefix;
+  const langDirective = buildGeminiLanguageDirective(language);
+
   logInfo("synthesisPrompt.buildSynthesisPrompt", {
     crisisType,
     flagCount: flags.length,
     answerCount: answers.length,
+    language,
   });
 
   const hasFlaggedIdk = answers.some((a) => a.idkFlagged);
@@ -109,17 +120,20 @@ export function buildSynthesisPrompt(params: {
     .map((b) => `End of Day ${b.day} Bridge: ${b.text}`)
     .join("\n");
 
-  const specialInstructions: string[] = [getCrisisFramingGuidance(crisisType)];
+  const specialInstructions: string[] = [
+    langDirective,
+    getCrisisFramingGuidance(crisisType),
+  ];
 
   if (hasFlaggedIdk) {
     specialInstructions.push(
-      `IDK SILENCE RULE: Include this exact sentence naturally: "There was a question you could not answer. That silence might be the most important data point of your entire Spiral."`,
+      `IDK SILENCE RULE: Include the meaning of this sentence naturally in the requested language: "There was a question you could not answer. That silence might be the most important data point of your entire Spiral."`,
     );
   }
 
   if (q29Answer && q29Answer.text.trim().length > 0) {
     specialInstructions.push(
-      `USER'S OWN PRIORITIES RULE (Q29): They wrote these priorities and next steps in their own words:\n${q29Answer.text}\nReflect these back plainly without suggesting any priorities or actions of your own, and close by asking: "Is this yours, or was it handed to you?"`,
+      `USER'S OWN PRIORITIES RULE (Q29): They wrote these priorities and next steps in their own words:\n${q29Answer.text}\nReflect these back plainly without suggesting any priorities or actions of your own, and close by asking: "${dict.synthesis.isThisYoursQuestion}"`,
     );
   }
 
@@ -137,5 +151,5 @@ ${journeyTranscript}
 5-Day Bridges:
 ${bridgeTranscript}
 
-Write the Day 5 synthesis JSON now ("text" 500 to 800 words, plain-spoken unbiased tone, ZERO suggested priorities/actions, ZERO clinical/pattern labels, 3 to 5 "insights" each with >= 2 quotes across >= 2 pre-Bridge days AND ending with "Or it may simply be that...").`;
+Write the Day 5 synthesis JSON now in the requested language ("text" plain-spoken unbiased tone, ZERO suggested priorities/actions, ZERO clinical/pattern labels, 3 to 5 "insights" each with >= 2 verbatim "..." quotes across >= 2 pre-Bridge days AND ending with "${altPrefix}...").`;
 }

@@ -14,8 +14,9 @@
  */
 
 import type { AnswerDoc } from "@/lib/db/schema";
+import { buildGeminiLanguageDirective, type SupportedLanguage } from "@/lib/i18n";
 
-export const PROMPT_VERSION = "bridge-v1.1";
+export const PROMPT_VERSION = "bridge-v1.2";
 
 export const BRIDGE_SYSTEM_INSTRUCTION = `You write the end-of-day Bridge Question for Spiral, a calm, logical, unbiased clarity guide (not a chatbot or companion).
 The Bridge Question is ONE plain-spoken line left with the person before a 10-hour gap.
@@ -48,7 +49,9 @@ export function buildBridgePrompt(
   day: number,
   dayTitle: string,
   todaysAnswers: AnswerDoc[],
+  language: SupportedLanguage = "en",
 ): string {
+  const langDirective = buildGeminiLanguageDirective(language);
   const renderedAnswers = todaysAnswers
     .map(
       (a) =>
@@ -56,9 +59,11 @@ export function buildBridgePrompt(
     )
     .join("\n\n");
 
-  return `Day ${day} of 5 (${dayTitle}) — Today's answers ONLY:
+  return `${langDirective}
+
+Day ${day} of 5 (${dayTitle}) — Today's answers ONLY:
 
 ${renderedAnswers}
 
-Write today's Bridge Question as JSON ({"text": "...", "format": "..."}). Strictly under 40 words, one line, zero advice, screenshot-safe, ending with a question mark.`;
+Write today's Bridge Question as JSON ({"text": "...", "format": "..."}) in the requested language. Strictly under 40 words, one single line, zero advice, screenshot-safe, ending with a question mark ("?").`;
 }

@@ -2,12 +2,14 @@
  * Acute Safety Pause Screen (`src/app/paused/page.tsx`).
  *
  * Feature overview & use cases:
- * - Implements `Design.md` Screen 7 (`Paused`):
- *   1. Calm full-screen pause when an answer triggers an `acute` safety classification
+ * - Implements `Design.md` Screen 7 (`Paused`) across all four languages (`en`, `hinglish`,
+ *   `hi`, `ta`) without altering protected phone numbers in `src/lib/safety/resources.ts`:
+ *   1. Calm full-screen pause when an answer (typed or voice-transcribed) triggers an `acute`
+ *      safety classification, or when opened from the onboarding support link
  *   2. Displays India-first support resources (`Tele-MANAS 14416`, `Emergency 112`) and
- *      international emergency instructions from `src/lib/safety/resources.ts`
- *   3. Reassures the person: "Your journey is saved. You can come back when you're ready."
- *   4. Allows resuming the saved journey when ready (`POST /api/journey/resume`)
+ *      international emergency instructions in the person's selected language
+ *   3. Includes `SettingsLanguageButton` so someone in distress can switch language immediately
+ *   4. Allows resuming the saved journey when ready (`POST /api/journey/resume`).
  */
 
 "use client";
@@ -15,20 +17,19 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { APP_META } from "@/lib/config";
+import { SettingsLanguageButton } from "@/components/LanguagePicker";
+import { useI18n } from "@/components/LanguageProvider";
 import { authorizedFetch } from "@/lib/firebase/client";
 import { logError, logInfo } from "@/lib/log";
-import {
-  INDIA_HELPLINE_RESOURCES,
-  SAFETY_PAUSE_COPY,
-} from "@/lib/safety/resources";
+import { INDIA_HELPLINE_RESOURCES } from "@/lib/safety/resources";
 import styles from "./page.module.css";
 
 /**
- * Renders the calm full-screen support resources view after an acute safety pause.
+ * Renders the calm full-screen support resources view in the visitor's chosen language.
  */
 export default function PausedPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [resuming, setResuming] = useState(false);
 
   /**
@@ -59,41 +60,53 @@ export default function PausedPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <Link href="/" className={styles.brand}>
-          Spiral
+          {t.meta.brandName}
         </Link>
-        <span className={styles.statusTag}>{SAFETY_PAUSE_COPY.eyebrow}</span>
+        <div className={styles.headerRight}>
+          <span className={styles.statusTag}>{t.paused.eyebrow}</span>
+          <SettingsLanguageButton />
+        </div>
       </header>
 
       <main className={styles.main}>
-        <h1 className={styles.heading}>{SAFETY_PAUSE_COPY.heading}</h1>
-        <p className={styles.body}>{SAFETY_PAUSE_COPY.body}</p>
+        <h1 className={styles.heading}>{t.paused.heading}</h1>
+        <p className={styles.body}>{t.paused.body}</p>
 
-        <section className={styles.helplineList} aria-label="Support resources">
-          {INDIA_HELPLINE_RESOURCES.map((resource) => (
-            <div key={resource.id} className={styles.helplineCard}>
-              <div className={styles.helplineHeader}>
-                <h2 className={styles.helplineName}>{resource.name}</h2>
-                <a
-                  href={`tel:${resource.number}`}
-                  className={styles.phoneLink}
-                >
-                  Call {resource.number}
-                  {resource.alternateNumber
-                    ? ` / ${resource.alternateNumber}`
-                    : ""}
-                </a>
+        <section
+          className={styles.helplineList}
+          aria-label={t.paused.resourcesAriaLabel}
+        >
+          {INDIA_HELPLINE_RESOURCES.map((resource) => {
+            const copy =
+              resource.id === "tele-manas"
+                ? t.paused.helplines.teleManas
+                : t.paused.helplines.emergency112;
+            return (
+              <div key={resource.id} className={styles.helplineCard}>
+                <div className={styles.helplineHeader}>
+                  <h2 className={styles.helplineName}>{copy.name}</h2>
+                  <a
+                    href={`tel:${resource.number}`}
+                    className={styles.phoneLink}
+                  >
+                    {copy.callPrefix} {resource.number}
+                    {resource.alternateNumber
+                      ? ` / ${resource.alternateNumber}`
+                      : ""}
+                  </a>
+                </div>
+                <p className={styles.availability}>{copy.availability}</p>
+                <p className={styles.helplineDesc}>{copy.description}</p>
               </div>
-              <p className={styles.availability}>{resource.availability}</p>
-              <p className={styles.helplineDesc}>{resource.description}</p>
-            </div>
-          ))}
+            );
+          })}
         </section>
 
         <div className={styles.internationalBox}>
-          {SAFETY_PAUSE_COPY.internationalNote}
+          {t.paused.internationalNote}
         </div>
 
-        <p className={styles.savedNotice}>{SAFETY_PAUSE_COPY.savedNotice}</p>
+        <p className={styles.savedNotice}>{t.paused.savedNotice}</p>
 
         <div className={styles.actions}>
           <button
@@ -102,15 +115,13 @@ export default function PausedPage() {
             disabled={resuming}
             onClick={() => void handleResumeWhenReady()}
           >
-            {resuming
-              ? "Returning to your Spiral..."
-              : "Return to my saved journey when ready"}
+            {resuming ? t.paused.resumingBtn : t.paused.resumeBtn}
           </button>
         </div>
       </main>
 
       <footer className={styles.footer}>
-        <p className={styles.disclaimer}>{APP_META.disclaimer}</p>
+        <p className={styles.disclaimer}>{t.meta.disclaimer}</p>
       </footer>
     </div>
   );

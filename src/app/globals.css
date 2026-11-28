@@ -22,8 +22,8 @@
   --accent-mint: #b6f7c9;
   --accent-mint-soft: rgba(182, 247, 201, 0.14);
   --border-subtle: rgba(201, 162, 255, 0.18);
-  --font-sans: "Sora", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
+  --font-sans: "Sora", "Noto Sans Devanagari", "Noto Sans Tamil", -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, monospace;
 }

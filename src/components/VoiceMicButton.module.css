@@ -1,0 +1,75 @@
+/**
+ * Styles for the stateless Voice Input button (`src/components/VoiceMicButton.module.css`).
+ */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.wrapCompact {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.micBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.micBtn:hover:not(:disabled) {
+  border-color: var(--accent-lavender);
+  color: var(--text-primary);
+}
+
+.micBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.micBtnRecording {
+  border-color: var(--accent-mint);
+  background-color: var(--accent-mint-soft);
+  color: var(--accent-mint);
+}
+
+.micIndicator {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background-color: var(--accent-lavender);
+  flex-shrink: 0;
+}
+
+.micIndicatorLive {
+  background-color: var(--accent-mint);
+}
+
+.explainLine {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.noticeLine {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--accent-lavender);
+}

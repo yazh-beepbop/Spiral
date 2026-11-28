@@ -27,6 +27,13 @@
   gap: 1rem;
 }
 
+.topBarRight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .dayLabel {
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -120,6 +127,18 @@
 
 .textareaLong {
   min-height: 10.5rem;
+}
+
+.answerBoxGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.inputWithMicRow {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
 }
 
 .choiceGrid {

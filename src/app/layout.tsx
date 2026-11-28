@@ -10,6 +10,7 @@
 
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { LanguageProvider } from "@/components/LanguageProvider";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { APP_META } from "@/lib/config";
 import "./globals.css";
@@ -54,12 +55,12 @@ export default function RootLayout({ children }: RootLayoutProps) {
         />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@400;500&family=Noto+Sans+Tamil:wght@400;500&family=Sora:wght@300;400;500;600&display=swap"
         />
       </head>
       <body>
         <ServiceWorkerRegistrar />
-        {children}
+        <LanguageProvider>{children}</LanguageProvider>
       </body>
     </html>
   );

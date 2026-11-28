@@ -26,10 +26,11 @@ import {
 import { resolveAdaptiveQuestionText } from "@/lib/journey/adaptive";
 import { evaluateGapLock } from "@/lib/journey/gap";
 import {
-  formatOpenerQuestion,
-  getDayMetadata,
-  getQuestionsForDay,
-} from "@/lib/journey/questions";
+  formatLocalizedOpenerQuestion,
+  getLocalizedDayMetadata,
+  getLocalizedQuestion,
+} from "@/lib/i18n";
+import { getQuestionsForDay } from "@/lib/journey/questions";
 import { logError, logInfo } from "@/lib/log";
 
 /**
@@ -127,8 +128,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    const currentQuestion = scheduled[nextIdx];
-    const dayMeta = getDayMetadata(day);
+    const language = journey.language ?? "en";
+    const baseQuestion = scheduled[nextIdx];
+    const currentQuestion =
+      getLocalizedQuestion(baseQuestion.qid, language) ?? baseQuestion;
+    const dayMeta = getLocalizedDayMetadata(day, language);
 
     let resolvedText = currentQuestion.text;
     let previousBridgeText: string | null = null;
@@ -136,7 +140,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (currentQuestion.qid === 6 && day >= 2) {
       const prevBridge = await getBridgeForDay(personId, journey.id, day - 1);
       previousBridgeText = prevBridge?.text ?? null;
-      resolvedText = formatOpenerQuestion(previousBridgeText);
+      resolvedText = formatLocalizedOpenerQuestion(
+        previousBridgeText,
+        language,
+      );
     } else if (currentQuestion.isAdaptive) {
       resolvedText = await resolveAdaptiveQuestionText({
         personId,
@@ -144,12 +151,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         day,
         qid: currentQuestion.qid,
         session,
+        language,
       });
     }
 
     return NextResponse.json({
       state: "question",
       journeyId: journey.id,
+      language,
       day,
       dayTitle: dayMeta.title,
       headerLabel: dayMeta.headerLabel,

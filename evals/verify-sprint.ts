@@ -28,18 +28,25 @@ import { GET as geminiTestGet } from "../src/app/api/gemini/test/route";
 import { POST as resumePost } from "../src/app/api/journey/resume/route";
 import { POST as startPost } from "../src/app/api/journey/start/route";
 import { GET as sessionCurrentGet } from "../src/app/api/session/current/route";
+import { PATCH as settingsPatch } from "../src/app/api/settings/route";
 import {
   GET as synthesisGet,
   PATCH as synthesisPatch,
   POST as synthesisPost,
 } from "../src/app/api/synthesis/route";
+import { POST as voiceTranscribePost } from "../src/app/api/voice/transcribe/route";
 import { countWords, validateBridgeText } from "../src/lib/bridge/generate";
 import { getServerConfig } from "../src/lib/config";
-import { clearCachedDemoSynthesisForTests } from "../src/lib/db/repository";
+import {
+  clearCachedDemoSynthesisForTests,
+  listDayAnswers,
+} from "../src/lib/db/repository";
 import {
   generateInteraction,
   setGeminiTransportForTests,
 } from "../src/lib/gemini/client";
+import { transcribeSpeechWithGemini } from "../src/lib/gemini/transcribe";
+import { SUPPORTED_LANGUAGES } from "../src/lib/i18n";
 import {
   DAY_METADATA,
   getQuestionsForDay,
@@ -207,16 +214,51 @@ async function runVerification(): Promise<void> {
       return { id: "ix_deep", text: "What quiet truth have you been postponing?" };
     }
 
+    // Voice speech-to-text transcription
+    if (params.systemInstruction?.includes("speech-to-text transcriber")) {
+      assert.ok(params.audioInput, "Voice STT call must attach audioInput");
+      if (params.prompt.includes('"hi"')) {
+        return {
+          id: "ix_stt_hi",
+          text: JSON.stringify({
+            transcript: "मीटिंग्स के बाद शाम तक मैं पूरी तरह थक जाता हूँ",
+          }),
+        };
+      }
+      if (params.prompt.includes('"ta"')) {
+        return {
+          id: "ix_stt_ta",
+          text: JSON.stringify({
+            transcript:
+              "இன்று இரவு தூங்கினால் மீண்டும் விழிக்கவே கூடாது என்று தோன்றுகிறது",
+          }),
+        };
+      }
+      return {
+        id: "ix_stt_hinglish",
+        text: JSON.stringify({
+          transcript: "Subah se shaam tak sirf status calls chalte rehte hain",
+        }),
+      };
+    }
+
     // Safety classifier
     if (params.systemInstruction?.includes("safety screening layer")) {
-      if (params.prompt.includes("ending my life")) {
+      if (
+        params.prompt.includes("ending my life") ||
+        params.prompt.includes("विழிக்கவே கூடாது") ||
+        params.prompt.includes("विழிக்க") ||
+        params.prompt.includes("தூங்கினால் மீண்டும் விழிக்கவே கூடாது") ||
+        params.prompt.includes("सो जाऊँ और कभी न उठूँ") ||
+        params.prompt.includes("so jaaun aur kabhi na uthun")
+      ) {
         return {
           id: "ix_safe_acute",
           text: JSON.stringify({
             level: "acute",
             confidence: 0.99,
             uncertain: false,
-            reason: "Explicit suicidal ideation.",
+            reason: "Explicit or indirect suicidal ideation.",
           }),
         };
       }
@@ -660,6 +702,198 @@ async function runVerification(): Promise<void> {
 
   console.log(
     `   [PASS] Demo seed + Day 5 Synthesis (${synWords} words, pre-Bridge multi-day quotes, alternative readings, None-fit option, and instant Firestore demo cache) verified.`,
+  );
+
+  // 6. Verify Voice Input (STT + Ephemeral Audio Deletion + Safety on Transcript) & All 4 Languages
+  console.log(
+    "6. Verifying Voice Input (STT + Audio Deletion) & Multilingual Flows (en, hinglish, hi, ta)...",
+  );
+  assert.deepEqual(
+    SUPPORTED_LANGUAGES.map((l) => l.code),
+    ["en", "hinglish", "hi", "ta"],
+  );
+
+  // 6a. Direct buffer zeroing & inline audio log stripping check
+  const sampleAudioBytes = Buffer.from([82, 73, 70, 70, 1, 2, 3, 4, 5, 6, 7, 8]);
+  const scrubbedAudioLog = stripInlineData({
+    audioInput: {
+      type: "audio",
+      mime_type: "audio/wav",
+      data: sampleAudioBytes.toString("base64"),
+    },
+  }) as { audioInput: { data: string } };
+  assert.equal(
+    scrubbedAudioLog.audioInput.data,
+    "[STRIPPED_INLINE_DATA]",
+    "Audio base64 must never appear in logs regardless of length",
+  );
+
+  const directStt = await transcribeSpeechWithGemini({
+    audioBuffer: sampleAudioBytes,
+    mimeType: "audio/webm;codecs=opus",
+    language: "hi",
+  });
+  assert.equal(
+    directStt.transcript,
+    "मीटिंग्स के बाद शाम तक मैं पूरी तरह थक जाता हूँ",
+  );
+  assert.equal(
+    sampleAudioBytes.every((b) => b === 0),
+    true,
+    "Audio buffer must be zeroed immediately after transcription",
+  );
+
+  // 6b. Start Hindi journey -> switch languages -> voice transcribe route -> store original text + language code -> Tamil voice safety pause
+  const tokenResLang = await authSessionPost();
+  const { token: tokenLang } = (await tokenResLang.json()) as { token: string };
+  const hiStartRes = await startPost(
+    makeReq("/api/journey/start", "POST", tokenLang, {
+      ageAttested18: true,
+      entryPoint: "career_fog",
+      language: "hi",
+    }),
+  );
+  assert.equal(hiStartRes.status, 200);
+
+  const hiSessionRes = await sessionCurrentGet(
+    makeReq("/api/session/current", "GET", tokenLang),
+  );
+  const hiSessionJson = (await hiSessionRes.json()) as {
+    language: string;
+    question: { qid: number; text: string; choices: string[] };
+  };
+  assert.equal(hiSessionJson.language, "hi");
+  assert.ok(
+    hiSessionJson.question.text.includes("काम"),
+    "Hindi Q1 text must be localized",
+  );
+
+  // Answer Q1 in Hindi and verify original text + language="hi" stored
+  const hiQ1Text = hiSessionJson.question.choices[2];
+  const hiAns1 = await answerPost(
+    makeReq("/api/answer", "POST", tokenLang, {
+      qid: 1,
+      text: hiQ1Text,
+      language: "hi",
+      inputMode: "text",
+    }),
+  );
+  assert.equal(hiAns1.status, 200);
+
+  // Switch to Hinglish in Settings and transcribe voice for Q2
+  const settingsHinglish = await settingsPatch(
+    makeReq("/api/settings", "PATCH", tokenLang, { language: "hinglish" }),
+  );
+  assert.equal(settingsHinglish.status, 200);
+
+  const formHinglish = new FormData();
+  formHinglish.append(
+    "audio",
+    new Blob([new Uint8Array([1, 2, 3, 4])], { type: "audio/webm" }),
+    "clip.webm",
+  );
+  formHinglish.append("language", "hinglish");
+  const sttRouteReq = new NextRequest(
+    "http://localhost:3000/api/voice/transcribe",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tokenLang}` },
+      body: formHinglish,
+    },
+  );
+  const sttRouteRes = await voiceTranscribePost(sttRouteReq);
+  assert.equal(sttRouteRes.status, 200);
+  const sttRouteJson = (await sttRouteRes.json()) as {
+    transcript: string;
+    language: string;
+    audioDeleted: boolean;
+  };
+  assert.equal(sttRouteJson.audioDeleted, true);
+  assert.equal(sttRouteJson.language, "hinglish");
+
+  // User edits the transcript slightly in the box and submits Q2
+  const editedVoiceTranscript = `${sttRouteJson.transcript} — bas Sunday ko lamp repair karte waqt sukoon mila.`;
+  const hinglishAns2 = await answerPost(
+    makeReq("/api/answer", "POST", tokenLang, {
+      qid: 2,
+      text: editedVoiceTranscript,
+      language: "hinglish",
+      inputMode: "voice",
+    }),
+  );
+  assert.equal(hinglishAns2.status, 200);
+
+  // Switch to Tamil in Settings, transcribe acute Tamil self-harm hint, and verify /api/answer pauses immediately!
+  await settingsPatch(
+    makeReq("/api/settings", "PATCH", tokenLang, { language: "ta" }),
+  );
+  const taSessionRes = await sessionCurrentGet(
+    makeReq("/api/session/current", "GET", tokenLang),
+  );
+  const taSessionJson = (await taSessionRes.json()) as {
+    language: string;
+    question: { qid: number; text: string };
+  };
+  assert.equal(taSessionJson.language, "ta");
+  assert.equal(taSessionJson.question.qid, 3);
+
+  const formTamil = new FormData();
+  formTamil.append(
+    "audio",
+    new Blob([new Uint8Array([9, 8, 7, 6])], { type: "audio/wav" }),
+    "clip.wav",
+  );
+  formTamil.append("language", "ta");
+  const taSttRes = await voiceTranscribePost(
+    new NextRequest("http://localhost:3000/api/voice/transcribe", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tokenLang}` },
+      body: formTamil,
+    }),
+  );
+  const taSttJson = (await taSttRes.json()) as { transcript: string };
+
+  const taAcuteSubmit = await answerPost(
+    makeReq("/api/answer", "POST", tokenLang, {
+      qid: 3,
+      text: taSttJson.transcript,
+      language: "ta",
+      inputMode: "voice",
+    }),
+  );
+  const taAcuteJson = (await taAcuteSubmit.json()) as {
+    action: string;
+    redirectTo: string;
+    language: string;
+  };
+  assert.equal(taAcuteJson.action, "paused");
+  assert.equal(taAcuteJson.redirectTo, "/paused");
+  assert.equal(taAcuteJson.language, "ta");
+
+  // Confirm stored AnswerDocs hold original answer text + language code!
+  const { verifyRequestPersonId } = await import("../src/lib/firebase/admin");
+  const { getLatestJourney } = await import("../src/lib/db/repository");
+  const langPersonId = await verifyRequestPersonId(
+    makeReq("/api/session/current", "GET", tokenLang),
+  );
+  const langJourney = await getLatestJourney(langPersonId);
+  assert.ok(langJourney);
+  const storedDay1All = await listDayAnswers(langPersonId, langJourney.id, 1, {
+    excludeFlaggedSafety: false,
+  });
+  const storedQ1 = storedDay1All.find((a) => a.qid === 1 && !a.excludedFromAI);
+  const storedQ2 = storedDay1All.find((a) => a.qid === 2 && !a.excludedFromAI);
+  const storedAcuteQ3 = storedDay1All.find(
+    (a) => a.qid === 3 && a.excludedFromAI,
+  );
+  assert.equal(storedQ1?.language, "hi");
+  assert.equal(storedQ1?.text, hiQ1Text);
+  assert.equal(storedQ2?.language, "hinglish");
+  assert.equal(storedQ2?.text, editedVoiceTranscript);
+  assert.equal(storedAcuteQ3?.language, "ta");
+  assert.equal(storedAcuteQ3?.excludedFromAI, true);
+  console.log(
+    "   [PASS] Voice STT, immediate audio deletion, Tamil/Hindi/Hinglish safety pause, and answer language persistence verified.",
   );
 
   setGeminiTransportForTests(null);

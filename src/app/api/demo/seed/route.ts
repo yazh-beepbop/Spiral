@@ -12,6 +12,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getServerConfig } from "@/lib/config";
+import { SupportedLanguageSchema } from "@/lib/db/schema";
 import { seedCareerFogDemoJourney } from "@/lib/demo/seed";
 import {
   UnauthorizedError,
@@ -22,6 +23,7 @@ import { logError, logInfo } from "@/lib/log";
 const SeedRequestSchema = z.object({
   ageAttested18: z.literal(true),
   includeDay5Answers: z.boolean().optional(),
+  language: SupportedLanguageSchema.optional(),
 });
 
 /**
@@ -58,6 +60,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const seeded = await seedCareerFogDemoJourney(personId, {
       includeDay5Answers: parsed.data.includeDay5Answers,
+      language: parsed.data.language,
     });
 
     return NextResponse.json({

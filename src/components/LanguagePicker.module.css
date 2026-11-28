@@ -1,0 +1,157 @@
+/**
+ * Styles for Onboarding and Settings Language Pickers (`src/components/LanguagePicker.module.css`).
+ */
+
+.onboardingCard {
+  padding: 1.2rem 1.35rem;
+  border-radius: 1rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.onboardingHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.labelMono {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-mint);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.optionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
+}
+
+.optionBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.optionBtnActive {
+  border-color: var(--accent-lavender);
+  background-color: var(--bg-surface-elevated);
+}
+
+.optionPrimary {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.optionNative {
+  font-size: 0.76rem;
+  color: var(--accent-mint);
+}
+
+.triggerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.triggerBtn:hover {
+  border-color: var(--accent-lavender);
+  color: var(--text-primary);
+}
+
+.triggerCode {
+  color: var(--accent-mint);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background-color: rgba(10, 5, 18, 0.76);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: spiralFadeIn 180ms ease-out both;
+}
+
+.modal {
+  width: 100%;
+  max-width: 28rem;
+  padding: 1.5rem;
+  border-radius: 1.1rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--accent-lavender);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.savingBadge {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--accent-mint);
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.25rem;
+}
+
+.doneBtn {
+  padding: 0.6rem 1.25rem;
+  border-radius: 999px;
+  border: none;
+  background-color: var(--accent-lavender);
+  color: var(--bg-primary);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+}

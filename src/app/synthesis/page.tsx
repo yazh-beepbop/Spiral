@@ -2,12 +2,11 @@
  * Day 5 Synthesis Screen (`src/app/synthesis/page.tsx`).
  *
  * Feature overview & use cases:
- * - Implements `Design.md` Screen 6 (`Synthesis`):
- *   1. Loads (or triggers generation of) the 500–800 word Day 5 reflection in plain,
- *      hedged language with zero clinical or taxonomy labels
- *   2. Renders each of the 3–5 pattern insights with an interactive `"Did this land?"`
- *      (`Yes` / `Not quite`) control that saves feedback via `PATCH /api/synthesis`
- *   3. Closes quietly ("Spiral is designed to end") with the mandatory disclaimer.
+ * - Implements `Design.md` Screen 6 (`Synthesis`) with full i18n (`en`, `hinglish`, `hi`, `ta`)
+ *   and zero hardcoded UI strings.
+ * - Includes `SettingsLanguageButton` in the header, calm "Try again" recovery on timeout/error,
+ *   per-insight `"Did this land?"` resonance feedback, `"None of these fit me"`, and verbatim
+ *   `"In your words"` Day 5 priorities.
  */
 
 "use client";
@@ -15,7 +14,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { APP_META } from "@/lib/config";
+import { SettingsLanguageButton } from "@/components/LanguagePicker";
+import { useI18n } from "@/components/LanguageProvider";
 import type { ClientSafeSynthesis } from "@/lib/db/schema";
 import { authorizedFetch } from "@/lib/firebase/client";
 import { logError, logInfo } from "@/lib/log";
@@ -32,6 +32,7 @@ interface SynthesisApiResponse {
  */
 export default function SynthesisPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [synthesis, setSynthesis] = useState<ClientSafeSynthesis | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -72,7 +73,6 @@ export default function SynthesisPage() {
         return;
       }
 
-      // Trigger Day 5 pattern map + synthesis generation
       const postRes = await authorizedFetch("/api/synthesis", {
         method: "POST",
         signal: AbortSignal.timeout(195_000),
@@ -83,9 +83,7 @@ export default function SynthesisPage() {
           router.replace("/session");
           return;
         }
-        setErrorMessage(
-          "Your closing reflection took longer than expected. Your five days of words are safe.",
-        );
+        setErrorMessage(t.synthesis.timeoutMessage);
         return;
       }
 
@@ -96,14 +94,12 @@ export default function SynthesisPage() {
         return;
       }
       logError("SynthesisPage.loadOrGenerate.failed", error);
-      setErrorMessage(
-        "Your closing reflection took longer than expected. Your five days of words are safe.",
-      );
+      setErrorMessage(t.synthesis.timeoutMessage);
     } finally {
       inFlightRef.current = false;
       setLoading(false);
     }
-  }, [router]);
+  }, [router, t.synthesis.timeoutMessage]);
 
   useEffect(() => {
     logInfo("SynthesisPage.mount");
@@ -123,7 +119,6 @@ export default function SynthesisPage() {
     setSavingId(insightId);
     logInfo("SynthesisPage.handleFeedback", { insightId, landed });
 
-    // Optimistic UI update
     setSynthesis({
       ...synthesis,
       insights: synthesis.insights.map((ins) =>
@@ -191,16 +186,21 @@ export default function SynthesisPage() {
     return (
       <div className={styles.page}>
         <header className={styles.header}>
-          <span className={styles.brand}>Spiral</span>
-          <span className={styles.dayTag}>Day 5 · Reflection</span>
+          <span className={styles.brand}>{t.meta.brandName}</span>
+          <div className={styles.headerRight}>
+            <span className={styles.dayTag}>
+              {t.synthesis.day5ReflectionTag}
+            </span>
+            <SettingsLanguageButton />
+          </div>
         </header>
         <div className={styles.loadingWrap}>
-          Reading across all five days of your words...
+          {t.synthesis.loadingLine1}
           <br />
-          Writing your closing reflection.
+          {t.synthesis.loadingLine2}
         </div>
         <footer className={styles.footer}>
-          <p className={styles.disclaimer}>{APP_META.disclaimer}</p>
+          <p className={styles.disclaimer}>{t.meta.disclaimer}</p>
         </footer>
       </div>
     );
@@ -217,15 +217,20 @@ export default function SynthesisPage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <Link href="/" className={styles.brand}>
-          Spiral
+          {t.meta.brandName}
         </Link>
-        <span className={styles.dayTag}>
-          {synthesis ? "Day 5 · Complete" : "Day 5 · Reflection"}
-        </span>
+        <div className={styles.headerRight}>
+          <span className={styles.dayTag}>
+            {synthesis
+              ? t.synthesis.day5CompleteTag
+              : t.synthesis.day5ReflectionTag}
+          </span>
+          <SettingsLanguageButton />
+        </div>
       </header>
 
       <main className={styles.main}>
-        <h1 className={styles.heading}>What surfaced across your five days</h1>
+        <h1 className={styles.heading}>{t.synthesis.heading}</h1>
 
         {errorMessage && !synthesis ? (
           <section className={styles.retryCard} role="alert">
@@ -235,7 +240,7 @@ export default function SynthesisPage() {
               className={styles.retryButton}
               onClick={() => void loadOrGenerate()}
             >
-              Try again
+              {t.synthesis.tryAgainBtn}
             </button>
           </section>
         ) : null}
@@ -252,24 +257,25 @@ export default function SynthesisPage() {
 
             <section
               className={styles.insightsSection}
-              aria-label="Threads we noticed"
+              aria-label={t.synthesis.threadsAriaLabel}
             >
               <h2 className={styles.sectionLabel}>
-                Threads in your own words · Did these land?
+                {t.synthesis.threadsSectionLabel}
               </h2>
 
               {synthesis.insights.map((insight) => (
                 <div key={insight.id} className={styles.insightCard}>
                   {insight.evidenceDays.length >= 2 ? (
                     <p className={styles.evidenceDaysBadge}>
-                      Across Days {insight.evidenceDays.join(" & ")} · In your
-                      own words
+                      {t.synthesis.acrossDaysPrefix}{" "}
+                      {insight.evidenceDays.join(" & ")} ·{" "}
+                      {t.synthesis.acrossDaysInYourWords}
                     </p>
                   ) : null}
                   <p className={styles.insightText}>{insight.text}</p>
                   <div className={styles.feedbackRow}>
                     <span className={styles.feedbackPrompt}>
-                      Did this land?
+                      {t.synthesis.didThisLand}
                     </span>
                     <div className={styles.feedbackButtons}>
                       <button
@@ -282,7 +288,7 @@ export default function SynthesisPage() {
                         disabled={savingId === insight.id}
                         onClick={() => void handleFeedback(insight.id, true)}
                       >
-                        Yes
+                        {t.synthesis.yesBtn}
                       </button>
                       <button
                         type="button"
@@ -294,7 +300,7 @@ export default function SynthesisPage() {
                         disabled={savingId === insight.id}
                         onClick={() => void handleFeedback(insight.id, false)}
                       >
-                        Not quite
+                        {t.synthesis.notQuiteBtn}
                       </button>
                     </div>
                   </div>
@@ -313,13 +319,11 @@ export default function SynthesisPage() {
                   disabled={savingId === "none_fit_me"}
                   onClick={() => void handleToggleNoneFit()}
                 >
-                  None of these fit me
+                  {t.synthesis.noneFitBtn}
                 </button>
                 {synthesis.noneFitMe ? (
                   <p className={styles.noneFitNote}>
-                    Noted — thank you for being direct. Trust your own read over
-                    ours; any reflection that doesn&apos;t ring true is meant to
-                    be set aside.
+                    {t.synthesis.noneFitNote}
                   </p>
                 ) : null}
               </div>
@@ -328,9 +332,11 @@ export default function SynthesisPage() {
             {synthesis.ownPrioritiesText ? (
               <section
                 className={styles.ownWordsCard}
-                aria-label="In your words"
+                aria-label={t.synthesis.inYourWordsHeading}
               >
-                <h2 className={styles.closingTitle}>In your words</h2>
+                <h2 className={styles.closingTitle}>
+                  {t.synthesis.inYourWordsHeading}
+                </h2>
                 <ul className={styles.ownWordsList}>
                   {synthesis.ownPrioritiesText
                     .split(/\r?\n/)
@@ -341,26 +347,21 @@ export default function SynthesisPage() {
                     ))}
                 </ul>
                 <p className={styles.ownWordsQuestion}>
-                  Is this yours, or was it handed to you?
+                  {t.synthesis.isThisYoursQuestion}
                 </p>
               </section>
             ) : null}
 
             <section className={styles.closingCard}>
-              <p className={styles.closingTitle}>This Spiral ends here</p>
-              <p className={styles.closingCopy}>
-                There are no streaks to keep and nothing more to unlock today.
-                Step back into your week with what felt true — and if life
-                reaches another turning point years from now, Spiral will
-                remember where you left off.
-              </p>
+              <p className={styles.closingTitle}>{t.synthesis.closingTitle}</p>
+              <p className={styles.closingCopy}>{t.synthesis.closingCopy}</p>
             </section>
           </>
         ) : null}
       </main>
 
       <footer className={styles.footer}>
-        <p className={styles.disclaimer}>{APP_META.disclaimer}</p>
+        <p className={styles.disclaimer}>{t.meta.disclaimer}</p>
       </footer>
     </div>
   );

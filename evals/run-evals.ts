@@ -81,6 +81,30 @@ const ADAPTIVE_NEUTRALITY_CASES: ReadonlyArray<{
       "How does burnout show up when you look at your Tuesday calendar?",
     expectValid: false,
   },
+  {
+    id: "adaptive-valid-hindi-open",
+    question:
+      "जब आप अपने मंगलवार को उस रविवार के बगल में रखते हैं, तो सबसे पहले क्या दिखाई देता है?",
+    expectValid: true,
+  },
+  {
+    id: "adaptive-invalid-hindi-leading",
+    question:
+      "क्या यह सच नहीं कि आप केवल दूसरों को ख़ुश करने के लिए वहाँ रुके हैं?",
+    expectValid: false,
+  },
+  {
+    id: "adaptive-valid-tamil-open",
+    question:
+      "உங்கள் செவ்வாய்க்கிழமையையும் அந்த ஞாயிற்றுக்கிழமையையும் அருகருகே வைத்துப் பார்க்கும்போது, முதலில் என்ன தெரிகிறது?",
+    expectValid: true,
+  },
+  {
+    id: "adaptive-invalid-tamil-leading",
+    question:
+      "மனதிற்குள் உண்மையில் நீங்கள் பயப்படுகிறீர்கள் என்பது உண்மை இல்லையா?",
+    expectValid: false,
+  },
 ];
 
 /**
@@ -189,6 +213,7 @@ async function main(): Promise<void> {
           layer: "L1",
           questionText: a.questionText,
           text: a.text,
+          language: "en" as const,
           idkCount: 0,
           idkFlagged: false,
           safety: { level: "none", model: "eval", escalated: false },

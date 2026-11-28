@@ -2,13 +2,10 @@
  * Bridge & Locked Countdown Screen (`src/app/bridge/page.tsx`).
  *
  * Feature overview & use cases:
- * - Implements `Design.md` Screens 4 (`Bridge`) and 5 (`Locked`):
- *   1. Shows today's personal Bridge Question in large, quiet type
- *   2. Displays `"Sit with this. Your next session opens in"` + a live countdown driven
- *      strictly by server-computed `remainingMs` + monotonic `performance.now()` elapsed time,
- *      so changing the device's wall clock cannot unlock the session (`ROADMAP.md` T8)
- *   3. Re-verifies unlock status against `GET /api/session/current` before showing `"Open Day N"`
- *   4. On Day 5 completion, displays Day 5's Bridge and leads directly to `/synthesis`.
+ * - Implements `Design.md` Screens 4 (`Bridge`) and 5 (`Locked`) with full i18n (`en`,
+ *   `hinglish`, `hi`, `ta`) and `SettingsLanguageButton` in the header.
+ * - Uses monotonic `performance.now()` + server-computed `remainingMs` so device clock
+ *   changes cannot unlock the gap (`ROADMAP.md` T8).
  */
 
 "use client";
@@ -16,7 +13,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { APP_META } from "@/lib/config";
+import { SettingsLanguageButton } from "@/components/LanguagePicker";
+import { useI18n } from "@/components/LanguageProvider";
 import { authorizedFetch } from "@/lib/firebase/client";
 import { logError, logInfo } from "@/lib/log";
 import styles from "./page.module.css";
@@ -60,6 +58,7 @@ function formatClock(ms: number): string {
  */
 export default function BridgePage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [bridge, setBridge] = useState<BridgeSnapshot | null>(null);
   const [nextDay, setNextDay] = useState<number | null>(null);
@@ -71,8 +70,7 @@ export default function BridgePage() {
   const syncedPerfTimeRef = useRef(0);
 
   /**
-   * Synchronizes Bridge and server-side lock state from `/api/session/current` (generating
-   * the Bridge first via `/api/bridge` if today's answers just completed).
+   * Synchronizes Bridge and server-side lock state from `/api/session/current`.
    */
   const syncBridgeState = useCallback(async (): Promise<void> => {
     try {
@@ -111,7 +109,9 @@ export default function BridgePage() {
           baseRemainingRef.current = generated.remainingMs;
           syncedPerfTimeRef.current = performance.now();
           setDisplayMs(generated.remainingMs);
-          setUnlockedOnServer(generated.remainingMs <= 0 && !generated.isDay5Complete);
+          setUnlockedOnServer(
+            generated.remainingMs <= 0 && !generated.isDay5Complete,
+          );
         }
         setLoading(false);
         return;
@@ -139,7 +139,6 @@ export default function BridgePage() {
       }
 
       if (data.state === "question") {
-        // Server has unlocked the next day's session!
         setUnlockedOnServer(true);
         setNextDay(data.day ?? null);
         setDisplayMs(0);
@@ -183,11 +182,12 @@ export default function BridgePage() {
     return (
       <div className={styles.page}>
         <header className={styles.header}>
-          <span className={styles.brand}>Spiral</span>
+          <span className={styles.brand}>{t.meta.brandName}</span>
+          <SettingsLanguageButton />
         </header>
-        <div className={styles.loadingWrap}>Loading your Bridge Question...</div>
+        <div className={styles.loadingWrap}>{t.bridge.loadingBridge}</div>
         <footer className={styles.footer}>
-          <p className={styles.disclaimer}>{APP_META.disclaimer}</p>
+          <p className={styles.disclaimer}>{t.meta.disclaimer}</p>
         </footer>
       </div>
     );
@@ -197,19 +197,23 @@ export default function BridgePage() {
     <div className={styles.page}>
       <header className={styles.header}>
         <Link href="/" className={styles.brand}>
-          Spiral
+          {t.meta.brandName}
         </Link>
-        <span className={styles.dayTag}>
-          {bridge ? `Day ${bridge.day} Bridge` : "Bridge"}
-        </span>
+        <div className={styles.headerRight}>
+          <span className={styles.dayTag}>
+            {bridge
+              ? `${bridge.day} · ${t.bridge.dayBridgeSuffix}`
+              : t.bridge.bridgeFallbackTag}
+          </span>
+          <SettingsLanguageButton />
+        </div>
       </header>
 
       <main className={styles.main}>
-        <p className={styles.eyebrow}>Your Bridge Question</p>
+        <p className={styles.eyebrow}>{t.bridge.eyebrow}</p>
 
         <blockquote className={styles.bridgeQuote}>
-          {bridge?.text ??
-            "Take a quiet evening away from the screen before your next session opens."}
+          {bridge?.text ?? t.bridge.fallbackBridgeQuote}
         </blockquote>
 
         {isDay5Final ? (
@@ -219,7 +223,7 @@ export default function BridgePage() {
               className={styles.primaryButton}
               onClick={() => router.push("/synthesis")}
             >
-              Read your five-day reflection
+              {t.bridge.readFiveDayReflection}
             </button>
           </div>
         ) : unlockedOnServer ? (
@@ -229,21 +233,21 @@ export default function BridgePage() {
               className={styles.primaryButton}
               onClick={() => router.push("/session")}
             >
-              {nextDay ? `Begin Day ${nextDay}` : "Continue your Spiral"}
+              {nextDay
+                ? `${t.bridge.beginNextDayPrefix} ${nextDay}`
+                : t.bridge.continueSpiral}
             </button>
           </div>
         ) : (
           <section className={styles.lockSection} aria-live="polite">
-            <p className={styles.sitLabel}>
-              Sit with this. Your next session opens in
-            </p>
+            <p className={styles.sitLabel}>{t.bridge.sitWithThisLabel}</p>
             <p className={styles.timer}>{formatClock(displayMs)}</p>
           </section>
         )}
       </main>
 
       <footer className={styles.footer}>
-        <p className={styles.disclaimer}>{APP_META.disclaimer}</p>
+        <p className={styles.disclaimer}>{t.meta.disclaimer}</p>
       </footer>
     </div>
   );

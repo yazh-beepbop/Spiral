@@ -22,6 +22,7 @@ import {
   BridgeFormatSchema,
 } from "@/lib/db/schema";
 import { generateStructuredInteraction } from "@/lib/gemini/client";
+import type { SupportedLanguage } from "@/lib/i18n";
 import { validateNonLeadingQuestion } from "@/lib/journey/leading-guard";
 import { getDayMetadata } from "@/lib/journey/questions";
 import { logInfo, logWarn } from "@/lib/log";
@@ -42,6 +43,9 @@ const ADVICE_PATTERNS: readonly RegExp[] = [
   /\bconsider\s+(?:taking|doing|making|leaving|quitting)\b/i,
   /\bremember\s+to\b/i,
   /\bdon'?t\s+forget\s+to\b/i,
+  /\baapko\s+.{1,30}\s+chahiye\b/i,
+  /(?:आपको\s+.{1,30}\s+चाहिए|कोशिश\s*करें\s*कि)/,
+  /(?:நீங்கள்\s+.{1,30}\s+வேண்டும்|முயற்சி\s*செய்யுங்கள்)/,
 ];
 
 const FORBIDDEN_CLINICAL_PATTERNS: readonly RegExp[] = [
@@ -152,8 +156,9 @@ export interface GeneratedBridgeOutput {
 export async function generateDayBridge(params: {
   day: number;
   answers: AnswerDoc[];
+  language?: SupportedLanguage;
 }): Promise<GeneratedBridgeOutput> {
-  const { day, answers } = params;
+  const { day, answers, language = "en" } = params;
   const config = getServerConfig();
 
   // Safety invariant: double-filter so excludedFromAI answers can NEVER enter Bridge prompts
@@ -165,10 +170,16 @@ export async function generateDayBridge(params: {
   }
 
   const dayMeta = getDayMetadata(day);
-  const basePrompt = buildBridgePrompt(day, dayMeta.title, safeAnswers);
+  const basePrompt = buildBridgePrompt(
+    day,
+    dayMeta.title,
+    safeAnswers,
+    language,
+  );
 
   logInfo("bridge.generateDayBridge.start", {
     day,
+    language,
     safeAnswerCount: safeAnswers.length,
     promptVersion: PROMPT_VERSION,
   });

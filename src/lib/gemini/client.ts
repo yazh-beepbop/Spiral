@@ -28,10 +28,16 @@ import { logError, logGenAICall, logInfo, logWarn } from "@/lib/log";
 export type ModelTier = "fast" | "deep";
 export type ThinkingDepth = "minimal" | "low" | "medium" | "high";
 
+export interface AudioInputAttachment {
+  base64Data: string;
+  mimeType: string;
+}
+
 export interface GeminiInteractionRequest {
   caller: string;
   tier: ModelTier;
   prompt: string;
+  audioInput?: AudioInputAttachment;
   systemInstruction?: string;
   thinkingLevel?: ThinkingDepth;
   temperature?: number;
@@ -59,6 +65,7 @@ export interface RawInteractionTransportParams {
   apiKey: string;
   model: string;
   prompt: string;
+  audioInput?: AudioInputAttachment;
   systemInstruction?: string;
   thinkingLevel?: ThinkingDepth;
   temperature?: number;
@@ -175,10 +182,30 @@ async function defaultInteractionTransport(
         }
       : undefined;
 
+  const interactionInput: Interactions.InteractionCreateParams.CreateModelInteractionParamsNonStreaming["input"] =
+    params.audioInput
+      ? [
+          {
+            type: "user_input",
+            content: [
+              {
+                type: "audio",
+                data: params.audioInput.base64Data,
+                mime_type: params.audioInput.mimeType,
+              },
+              {
+                type: "text",
+                text: params.prompt,
+              },
+            ],
+          },
+        ]
+      : params.prompt;
+
   const createParams: Interactions.InteractionCreateParams.CreateModelInteractionParamsNonStreaming =
     {
       model: params.model,
-      input: params.prompt,
+      input: interactionInput,
       store: false,
       stream: false,
       generation_config: generationConfig,
@@ -361,6 +388,7 @@ export async function generateInteraction(
             apiKey: config.geminiApiKey,
             model: primaryModel,
             prompt: request.prompt,
+            audioInput: request.audioInput,
             systemInstruction: request.systemInstruction,
             thinkingLevel: request.thinkingLevel,
             temperature: request.temperature,
@@ -393,6 +421,15 @@ export async function generateInteraction(
         prompt: {
           systemInstruction: request.systemInstruction,
           input: request.prompt,
+          ...(request.audioInput
+            ? {
+                audioInput: {
+                  type: "audio",
+                  mime_type: request.audioInput.mimeType,
+                  data: request.audioInput.base64Data,
+                },
+              }
+            : {}),
         },
         output: response.text,
       });
@@ -459,6 +496,7 @@ export async function generateInteraction(
             apiKey: config.geminiApiKey,
             model: fallbackModel,
             prompt: request.prompt,
+            audioInput: request.audioInput,
             systemInstruction: request.systemInstruction,
             thinkingLevel: fallbackThinking,
             temperature: request.temperature,
@@ -491,6 +529,15 @@ export async function generateInteraction(
         prompt: {
           systemInstruction: request.systemInstruction,
           input: request.prompt,
+          ...(request.audioInput
+            ? {
+                audioInput: {
+                  type: "audio",
+                  mime_type: request.audioInput.mimeType,
+                  data: request.audioInput.base64Data,
+                },
+              }
+            : {}),
         },
         output: response.text,
       });

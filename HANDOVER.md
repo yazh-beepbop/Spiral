@@ -4,49 +4,51 @@ Agents: read this first in every new chat. Update it at the end of every session
 
 ## Right now
 
-- **Date:** 27 Nov 2026 (Gemini 4 Sprint, Bengaluru)
-- **Current task:** T0–T10 complete & committed; T11 ready for `gcloud run deploy`
-- **Last working commit:** `03cf64e` (`docs: clarify Spiral's role as a clarity guide`, building on `a8ca658`)
-- **Branch:** main
-- **Live URL:** ready to deploy via `CLOUD-RUN-DEPLOY.md`
+- **Date:** 28 Nov 2026 (Gemini 4 Sprint, Bengaluru)
+- **Branch:** `voice-and-language` (branched cleanly off `main` `f40a55a`; `main` and the demo build untouched)
+- **Current task:** Voice Input (stateless Gemini STT) + Language Option (`en`, `hinglish`, `hi`, `ta`) complete, tested end-to-end, committed, and pushed
 - **Demo mode:** `GAP_MINUTES=2`, `DEMO_MODE=true`
+
+## Voice Input & Language Option Summary (`voice-and-language`)
+
+1. **Voice Input (speech-to-text only — Spiral never speaks back):**
+   - Added `VoiceMicButton` (`src/components/VoiceMicButton.tsx`) next to every text answer box on `/session` (`short`, `long`, and Day 5 `QID 29` priority/step inputs) with tap-to-record / tap-to-stop controls.
+   - Requests microphone permission **only on first tap**, showing a plain-spoken explanation line beforehand.
+   - Transcribes audio on the server via `POST /api/voice/transcribe` -> `src/lib/gemini/transcribe.ts` (`gemini-4-hydrogen`, `store: false`) supporting English, Hinglish, Tamil, Hindi, and Indian accents.
+   - Places the transcript into the answer box so the user can read and edit it before sending; submits through `/api/answer` so the existing safety classifier runs identically to typed text.
+   - Deletes/zeroes audio buffers immediately in `finally` on both client and server (`audioBuffer.fill(0)`) and strips inline audio data in `src/lib/log.ts` — audio is never stored.
+2. **Language Option (`English`, `Hinglish`, `Hindi`, `Tamil`):**
+   - Added onboarding (`OnboardingLanguagePicker` on `/start`) and header settings (`SettingsLanguageButton` modal across all screens) backed by `LanguageProvider` and `GET/PATCH /api/settings`.
+   - Moved all UI copy across `/`, `/start`, `/session`, `/bridge`, `/synthesis`, and `/paused` into typed i18n dictionaries (`src/lib/i18n/{en,hinglish,hi,ta}.ts`) with zero hardcoded UI strings and without modifying protected `questions.ts` or `resources.ts`.
+   - Wired `language` into Adaptive L3 questions, IDK redirects, Bridge generation (`< 40` words, no advice), and Day 5 synthesis; every saved `AnswerDoc` persists original `text` + `language` code (`en | hinglish | hi | ta`).
+   - Extended `src/lib/safety/classify.ts`, `src/lib/safety/prompt.ts`, `/paused` helplines, and `evals/safety-set.json` with red-team self-harm hint cases (plus workplace-metaphor controls) across English, Hinglish, Hindi (`हिन्दी`), and Tamil (`தமிழ்`).
+3. **End-to-End Verification:**
+   - `npm run typecheck`, `npm run lint`, `npm run build`, `npm run evals` (14 safety cases + Bridge golden set + multilingual leading-question guards), `evals/verify-sprint.ts`, and live Gemini multimodal STT + Hindi Bridge + Tamil safety-pause tests all passed.
 
 ## State of each part
 
 | Part | Status | Notes |
 |---|---|---|
-| Scaffold, config, logging | Complete | Standalone Next.js App Router, `src/lib/config.ts`, `src/lib/log.ts`, PWA manifest/SW |
-| Gemini client | Complete | `@google/genai` Interactions API (`ai.interactions.create`), 503 backoff retry + fallback |
-| Auth + person + journey | Complete | `firestore.rules`, Firebase Auth + Cloud Run HMAC session, `/start` 18+ gate |
-| Question bank | Complete | `src/lib/journey/questions.ts` (QIDs 1–28, Opener, L3, custom IDK redirects) |
-| Session screen | Complete | `/session`, `/api/session/current`, `/api/answer` |
-| Safety layer | Complete | `src/lib/safety/classify.ts`, `/paused` with India helplines (14416, 112), `excludedFromAI` |
-| IDK rule | Complete | `src/lib/journey/idk.ts` Standard Mode 3-step escalation |
-| Bridge | Complete | `src/lib/bridge/generate.ts`, `/api/bridge`, `/bridge`, golden set evals |
-| Gap | Complete | `src/lib/journey/gap.ts`, server-enforced `nextUnlockAt` + monotonic countdown |
-| Days 2 to 5 | Complete | Opener (Q6) + cached deep-model Adaptive L3 questions (Q11, Q16, Q23) |
-| Synthesis | Complete | `src/lib/patterns/detect.ts` + `src/lib/synthesis/generate.ts` + `/synthesis` feedback |
+| Scaffold, config, logging | Complete | Standalone Next.js App Router, `src/lib/config.ts`, `src/lib/log.ts` (inline audio stripped), PWA manifest/SW |
+| Gemini client | Complete | `@google/genai` Interactions API (`ai.interactions.create`), 45s synthesis timeout + Hydrogen fallback, `user_input` audio support |
+| Auth + person + journey | Complete | `firestore.rules`, Firebase Auth + Cloud Run HMAC session, `/start` 18+ gate, `language` persisted |
+| Question bank + i18n | Complete | `src/lib/journey/questions.ts` untouched; localized via `src/lib/i18n/{en,hinglish,hi,ta}.ts` |
+| Session + Voice STT | Complete | `/session`, `VoiceMicButton`, `/api/voice/transcribe` (ephemeral audio deleted immediately) |
+| Safety layer | Complete | Multilingual `classify.ts` + `/paused` helplines (`14416`, `112`) + red-team evals in all 4 languages |
+| IDK rule | Complete | `src/lib/journey/idk.ts` Standard Mode 3-step escalation localized across all 4 languages |
+| Bridge + Gap | Complete | `<40w` multilingual Bridges (`src/lib/bridge/generate.ts`) + server-enforced `nextUnlockAt` |
+| Synthesis | Complete | `src/lib/patterns/detect.ts` + `src/lib/synthesis/generate.ts` + cached demo safety net |
 | Deploy + demo seed | Built & ready | Cloud Run `Dockerfile` + `CLOUD-RUN-DEPLOY.md` + `src/lib/demo/seed.ts` |
-
-## Open questions for Yazh
-
-- Add `GEMINI_API_KEY` (and `GOOGLE_CLOUD_PROJECT`) to `.env.local` for live Gemini 4 runs, then push to your private GitHub repo and run `gcloud run deploy` per `CLOUD-RUN-DEPLOY.md`.
 
 ## Watch out for
 
-- The temporary Google account is deleted tomorrow. Push everything to the private repo before leaving.
-- If calls start failing with 429, check the spend cap at aistudio.google.com/spend.
-- If calls fail with 503, the model is overloaded. The client should fall back. Log it in `BUGS.md`.
-
-## Next three steps
-
-1. T0 scaffold and private repo
-2. T1 Gemini client
-3. T2 auth, person, journey
+- The temporary Google account is deleted tomorrow. Keep all branches pushed to the private repo.
+- Never commit `.env*` or service account keys.
+- On `v1` Interactions API, multimodal inputs must be wrapped in `[{ type: "user_input", content: [...] }]` (`BUGS.md` #4).
 
 ## Session log
 
 | When | Agent / model | What got done | Left off at |
 |---|---|---|---|
-| 2026-11-27 | Antigravity (Gemini 4 Carbon) | Built T0 scaffold (`package.json`, `tsconfig.json`, `next.config.ts`, `.gitignore`, `.env.local`, `src/lib/config.ts`, `src/lib/log.ts`, `public/manifest.json`, `public/sw.js`, Landing screen); verified build, lint, typecheck, and server probe | Complete Git init + private GitHub push for T0, enable Gemini API plugin, then start T1 |
-| 2026-11-27 | Antigravity (Gemini 4 Carbon) | Built T1–T11 end-to-end: `@google/genai` Interactions API client, Firestore rules & person-rooted repo, 18+ `/start`, Career Fog QIDs 1–28, `/session`, safety classifier + `/paused`, 3-step IDK rule, `<40w` Bridge + golden evals, server gap + countdown, adaptive L3, Day 5 pattern map + 500–800w hedged `/synthesis`, demo seeder, and Cloud Run `Dockerfile` | Add `GEMINI_API_KEY`, push to private GitHub repo, and run `gcloud run deploy` |
+| 2026-11-27 | Antigravity (Gemini 4 Carbon) | Built T0–T11 end-to-end on `main`, fixed `/synthesis` timeout + Hydrogen fallback + Firestore demo cache (`f40a55a`) | Demo build verified and pushed on `main` |
+| 2026-11-28 | Antigravity (Gemini 4 Carbon) | On branch `voice-and-language`: built stateless Gemini Voice Input STT (`VoiceMicButton`, `/api/voice/transcribe`), 4-language i18n (`en`, `hinglish`, `hi`, `ta`) with onboarding & settings pickers, multilingual Bridges/questions/helplines, answer `language` persistence, and multilingual self-harm red-team evals; verified live end-to-end | Committed and pushed to `origin/voice-and-language`; ready for review/PR |
