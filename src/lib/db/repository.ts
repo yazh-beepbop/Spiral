@@ -38,6 +38,8 @@ import {
   SessionDocSchema,
   type SynthesisDoc,
   SynthesisDocSchema,
+  type UsageLogDoc,
+  UsageLogDocSchema,
 } from "@/lib/db/schema";
 import {
   getAdminFirestore,
@@ -63,6 +65,8 @@ interface LocalPersonNode {
 interface LocalStoreRoot {
   persons: Record<string, LocalPersonNode>;
   demoCache?: Record<string, DemoSynthesisCacheDoc>;
+  usage?: Record<string, UsageLogDoc>;
+  usageDailyCounts?: Record<string, number>;
 }
 
 const DEMO_SYNTHESIS_CACHE_DOC_ID = "career_fog_synthesis";
@@ -1122,4 +1126,126 @@ export async function clearCachedDemoSynthesisForTests(): Promise<void> {
     .collection("demoCache")
     .doc(DEMO_SYNTHESIS_CACHE_DOC_ID)
     .delete();
+}
+
+/**
+ * Returns the number of Gemini model calls recorded for `personId` on `dayUtc` (`YYYY-MM-DD`).
+ */
+export async function getDailyUserCallCount(
+  personId: string,
+  dayUtc = new Date().toISOString().slice(0, 10),
+): Promise<number> {
+  logInfo("db.getDailyUserCallCount", {
+    personIdLen: personId.length,
+    dayUtc,
+  });
+  const counterKey = `${personId}_${dayUtc}`;
+
+  if (!isFirebaseAdminConfigured() && process.env.NODE_ENV !== "production") {
+    const store = readLocalStore();
+    return store.usageDailyCounts?.[counterKey] ?? 0;
+  }
+
+  const snap = await getAdminFirestore()
+    .collection("usageDaily")
+    .doc(counterKey)
+    .get();
+  if (!snap.exists) {
+    return 0;
+  }
+  const rawCount = (snap.data() as { count?: unknown } | undefined)?.count;
+  return typeof rawCount === "number" && Number.isFinite(rawCount)
+    ? rawCount
+    : 0;
+}
+
+/**
+ * Logs model name, token counts, and estimated USD cost to the `usage` collection
+ * WITHOUT ever storing personal answer or prompt text (`CONSTRAINTS.md`).
+ * Also increments the per-user daily call counter when `personId` is provided.
+ */
+export async function recordModelUsage(
+  entry: Omit<UsageLogDoc, "id" | "dayUtc" | "createdAt"> & {
+    dayUtc?: string;
+    createdAt?: string;
+  },
+): Promise<UsageLogDoc> {
+  const createdAt = entry.createdAt ?? new Date().toISOString();
+  const dayUtc = entry.dayUtc ?? createdAt.slice(0, 10);
+  const validated = UsageLogDocSchema.parse({
+    ...entry,
+    id: `u_${randomUUID().replace(/-/g, "").slice(0, 16)}`,
+    dayUtc,
+    createdAt,
+  });
+
+  logInfo("db.recordModelUsage", {
+    caller: validated.caller,
+    model: validated.model,
+    tier: validated.tier,
+    totalTokens: validated.totalTokens,
+    estimatedCostUsd: validated.estimatedCostUsd,
+    hasPersonId: Boolean(validated.personId),
+  });
+
+  if (!isFirebaseAdminConfigured() && process.env.NODE_ENV !== "production") {
+    const store = readLocalStore();
+    store.usage = store.usage ?? {};
+    store.usage[validated.id] = validated;
+    if (validated.personId) {
+      const counterKey = `${validated.personId}_${dayUtc}`;
+      store.usageDailyCounts = store.usageDailyCounts ?? {};
+      store.usageDailyCounts[counterKey] =
+        (store.usageDailyCounts[counterKey] ?? 0) + 1;
+    }
+    writeLocalStore(store);
+    return validated;
+  }
+
+  const db = getAdminFirestore();
+  await db.collection("usage").doc(validated.id).set(validated);
+
+  if (validated.personId) {
+    const counterKey = `${validated.personId}_${dayUtc}`;
+    const counterRef = db.collection("usageDaily").doc(counterKey);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(counterRef);
+      const prev =
+        snap.exists && typeof snap.data()?.count === "number"
+          ? (snap.data()?.count as number)
+          : 0;
+      tx.set(
+        counterRef,
+        {
+          personId: validated.personId,
+          dayUtc,
+          count: prev + 1,
+          updatedAt: createdAt,
+        },
+        { merge: true },
+      );
+    });
+  }
+
+  return validated;
+}
+
+/**
+ * Lists recorded usage documents in local dev/test mode so automated tests can assert
+ * token/cost logging and verify that zero answer text was stored.
+ */
+export async function listUsageRecordsForTests(): Promise<UsageLogDoc[]> {
+  logInfo("db.listUsageRecordsForTests");
+  if (!isFirebaseAdminConfigured() && process.env.NODE_ENV !== "production") {
+    const store = readLocalStore();
+    return Object.values(store.usage ?? {}).map((u) =>
+      UsageLogDocSchema.parse(u),
+    );
+  }
+  const snap = await getAdminFirestore().collection("usage").limit(100).get();
+  return snap.docs.map((d) =>
+    UsageLogDocSchema.parse(
+      normalizeTimestamps(d.data() as Record<string, unknown>),
+    ),
+  );
 }

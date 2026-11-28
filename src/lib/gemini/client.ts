@@ -2,31 +2,60 @@
  * Server-only Gemini Interactions API client wrapper (`src/lib/gemini/client.ts`).
  *
  * Feature overview & use cases:
- * - Centralizes EVERY model call across Spiral (safety classification, IDK detection,
- *   adaptive L3 questions, Bridge generation, Day 5 pattern mapping, and Day 5 synthesis).
+ * - Centralizes EVERY model call across Spiral (safety classification, IDK detection and
+ *   smaller-question redirects, adaptive L3 questions, Bridge generation, Day 5 pattern
+ *   mapping, and Day 5 synthesis).
  * - Uses `@google/genai` (>= 3.x) Interactions API (`ai.interactions.create`) with
  *   stateless persistence (`store: false`) so Cloud Firestore remains the single source
  *   of truth (`DECISIONS.md` S3).
+ * - Enforces per-user daily call caps (`dailyUserCallCap` from `src/lib/config.ts`) and
+ *   logs model used, token counts, and estimated USD cost per call to the `usage` collection
+ *   with ZERO personal answer text (`COST RULES` & `CONSTRAINTS.md`).
  * - Implements model routing (`fast` vs `deep` from `src/lib/config.ts`), exponential
  *   backoff retries on HTTP 503/overload errors, and automatic failover to the configured
- *   fallback model (`modelFastFallback` / `modelDeepFallback`).
+ *   fallback model when enabled.
  * - Provides `generateStructuredInteraction` to enforce `zod` schema validation on every
  *   structured JSON output, retrying once if JSON parsing or schema validation fails.
- * - Logs every request and response through `logGenAICall` with inline data stripped and
- *   secrets scrubbed.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   GoogleGenAI,
   type GoogleGenAIInteraction,
   type Interactions,
 } from "@google/genai";
 import type { z } from "zod";
-import { getServerConfig } from "@/lib/config";
+import { getServerConfig, type ServerConfig } from "@/lib/config";
+import {
+  getDailyUserCallCount,
+  recordModelUsage,
+} from "@/lib/db/repository";
 import { logError, logGenAICall, logInfo, logWarn } from "@/lib/log";
 
 export type ModelTier = "fast" | "deep";
 export type ThinkingDepth = "minimal" | "low" | "medium" | "high";
+
+export interface TokenUsageStats {
+  inputTokens: number;
+  outputTokens: number;
+  thoughtTokens: number;
+  totalTokens: number;
+}
+
+export interface UsageExecutionContext {
+  personId?: string | null;
+}
+
+export class DailyCallCapExceededError extends Error {
+  readonly status = 429;
+
+  constructor(dailyCap: number) {
+    super(
+      `Daily AI usage limit reached (${dailyCap} calls today). Your progress is saved; please return tomorrow.`,
+    );
+    this.name = "DailyCallCapExceededError";
+  }
+}
 
 export interface GeminiInteractionRequest {
   caller: string;
@@ -42,8 +71,10 @@ export interface GeminiInteractionRequest {
   timeoutMs?: number;
   maxRetries?: number;
   primaryModelOverride?: string;
-  fallbackModel?: string;
+  fallbackModel?: string | null;
   fallbackThinkingLevel?: ThinkingDepth;
+  personId?: string | null;
+  promptVersion?: string;
 }
 
 export interface GeminiInteractionResult {
@@ -53,6 +84,8 @@ export interface GeminiInteractionResult {
   fallbackUsed: boolean;
   attempts: number;
   durationMs: number;
+  usage: TokenUsageStats;
+  estimatedCostUsd: number;
 }
 
 export interface RawInteractionTransportParams {
@@ -73,14 +106,27 @@ export interface RawInteractionTransportParams {
 export interface RawInteractionTransportResponse {
   id: string;
   text: string;
+  usage?: Partial<TokenUsageStats>;
 }
 
 export type InteractionTransport = (
   params: RawInteractionTransportParams,
 ) => Promise<RawInteractionTransportResponse>;
 
+const usageContextStorage = new AsyncLocalStorage<UsageExecutionContext>();
 let cachedSdkClient: { apiKey: string; instance: GoogleGenAI } | null = null;
 let customTransportForTests: InteractionTransport | null = null;
+
+/**
+ * Binds `personId` in async context so every downstream Gemini call within `work`
+ * automatically enforces the per-user daily call cap and records usage metrics.
+ */
+export function runWithUsageContext<T>(
+  context: UsageExecutionContext,
+  work: () => Promise<T>,
+): Promise<T> {
+  return usageContextStorage.run(context, work);
+}
 
 /**
  * Overrides the underlying network transport during automated unit/integration tests
@@ -145,6 +191,70 @@ export function extractTextFromInteraction(
 }
 
 /**
+ * Normalizes SDK `interaction.usage` token counts, falling back to a conservative
+ * character-based estimate (`chars / 4`) when mocked transports omit token metadata.
+ */
+export function resolveTokenUsage(
+  prompt: string,
+  systemInstruction: string | undefined,
+  outputText: string,
+  rawUsage?: Partial<TokenUsageStats>,
+): TokenUsageStats {
+  const estInput = Math.max(
+    1,
+    Math.ceil(((systemInstruction?.length ?? 0) + prompt.length) / 4),
+  );
+  const estOutput = Math.max(1, Math.ceil(outputText.length / 4));
+
+  const inputTokens =
+    typeof rawUsage?.inputTokens === "number" && rawUsage.inputTokens >= 0
+      ? rawUsage.inputTokens
+      : estInput;
+  const outputTokens =
+    typeof rawUsage?.outputTokens === "number" && rawUsage.outputTokens >= 0
+      ? rawUsage.outputTokens
+      : estOutput;
+  const thoughtTokens =
+    typeof rawUsage?.thoughtTokens === "number" && rawUsage.thoughtTokens >= 0
+      ? rawUsage.thoughtTokens
+      : 0;
+  const totalTokens =
+    typeof rawUsage?.totalTokens === "number" && rawUsage.totalTokens >= 0
+      ? rawUsage.totalTokens
+      : inputTokens + outputTokens + thoughtTokens;
+
+  return {
+    inputTokens,
+    outputTokens,
+    thoughtTokens,
+    totalTokens,
+  };
+}
+
+/**
+ * Computes estimated USD cost for a single model call from `src/lib/config.ts` rates.
+ */
+export function estimateCallCostUsd(
+  tier: ModelTier,
+  usage: TokenUsageStats,
+  config: ServerConfig,
+): number {
+  const inputRate =
+    tier === "fast"
+      ? config.fastInputCostPerMillionUsd
+      : config.deepInputCostPerMillionUsd;
+  const outputRate =
+    tier === "fast"
+      ? config.fastOutputCostPerMillionUsd
+      : config.deepOutputCostPerMillionUsd;
+
+  const rawUsd =
+    (usage.inputTokens / 1_000_000) * inputRate +
+    ((usage.outputTokens + usage.thoughtTokens) / 1_000_000) * outputRate;
+  return Number(rawUsd.toFixed(8));
+}
+
+/**
  * Executes a single non-streaming call against `@google/genai`'s v3 `ai.interactions.create`.
  */
 async function defaultInteractionTransport(
@@ -201,6 +311,16 @@ async function defaultInteractionTransport(
   return {
     id: interaction.id,
     text,
+    usage: interaction.usage
+      ? {
+          inputTokens:
+            interaction.usage.total_input_tokens ??
+            interaction.usage.initial_input_tokens,
+          outputTokens: interaction.usage.total_output_tokens,
+          thoughtTokens: interaction.usage.total_thought_tokens,
+          totalTokens: interaction.usage.total_tokens,
+        }
+      : undefined,
   };
 }
 
@@ -306,8 +426,43 @@ function shouldAttemptFallbackModel(error: unknown): boolean {
 }
 
 /**
- * Calls the Gemini Interactions API on the server with automatic 503 backoff retries,
- * configured fallback model routing, and full structured logging.
+ * Persists non-sensitive usage telemetry (`model`, `tokens`, `estimatedCostUsd`) to Firestore/local store.
+ */
+async function safeRecordUsage(params: {
+  personId: string | null;
+  caller: string;
+  model: string;
+  tier: ModelTier;
+  promptVersion: string | null;
+  usage: TokenUsageStats;
+  estimatedCostUsd: number;
+  fallbackUsed: boolean;
+}): Promise<void> {
+  try {
+    await recordModelUsage({
+      personId: params.personId,
+      caller: params.caller,
+      model: params.model,
+      tier: params.tier,
+      promptVersion: params.promptVersion,
+      inputTokens: params.usage.inputTokens,
+      outputTokens: params.usage.outputTokens,
+      thoughtTokens: params.usage.thoughtTokens,
+      totalTokens: params.usage.totalTokens,
+      estimatedCostUsd: params.estimatedCostUsd,
+      fallbackUsed: params.fallbackUsed,
+    });
+  } catch (usageErr: unknown) {
+    logError("gemini.safeRecordUsage.failed", usageErr, {
+      caller: params.caller,
+      model: params.model,
+    });
+  }
+}
+
+/**
+ * Calls the Gemini Interactions API on the server with per-user daily call cap enforcement,
+ * automatic 503 backoff retries, fallback model routing, usage logging, and structured GenAI logs.
  */
 export async function generateInteraction(
   request: GeminiInteractionRequest,
@@ -325,20 +480,43 @@ export async function generateInteraction(
     );
   }
 
+  const effectivePersonId =
+    request.personId !== undefined
+      ? request.personId
+      : (usageContextStorage.getStore()?.personId ?? null);
+
+  if (effectivePersonId) {
+    const todayCount = await getDailyUserCallCount(effectivePersonId);
+    if (todayCount >= config.dailyUserCallCap) {
+      logWarn(
+        "gemini.generateInteraction.dailyCapReached",
+        "Per-user daily Gemini call cap reached",
+        {
+          caller: request.caller,
+          todayCount,
+          dailyUserCallCap: config.dailyUserCallCap,
+        },
+      );
+      throw new DailyCallCapExceededError(config.dailyUserCallCap);
+    }
+  }
+
   const primaryModel =
     request.primaryModelOverride ??
     (request.tier === "fast" ? config.modelFast : config.modelDeep);
   const fallbackModel =
-    request.fallbackModel ??
-    (request.tier === "fast"
-      ? config.modelFastFallback
-      : config.modelDeepFallback);
+    request.fallbackModel === null
+      ? ""
+      : (request.fallbackModel ??
+        (request.tier === "fast"
+          ? config.modelFastFallback
+          : config.modelDeepFallback));
 
   logInfo("gemini.generateInteraction.start", {
     caller: request.caller,
     tier: request.tier,
     primaryModel,
-    fallbackModel,
+    fallbackModel: fallbackModel || null,
     thinkingLevel: request.thinkingLevel ?? "default",
     timeoutMs: request.timeoutMs ?? null,
     promptChars: request.prompt.length,
@@ -375,6 +553,25 @@ export async function generateInteraction(
       );
 
       const durationMs = Date.now() - callStart;
+      const usage = resolveTokenUsage(
+        request.prompt,
+        request.systemInstruction,
+        response.text,
+        response.usage,
+      );
+      const estimatedCostUsd = estimateCallCostUsd(request.tier, usage, config);
+
+      await safeRecordUsage({
+        personId: effectivePersonId,
+        caller: request.caller,
+        model: primaryModel,
+        tier: request.tier,
+        promptVersion: request.promptVersion ?? null,
+        usage,
+        estimatedCostUsd,
+        fallbackUsed: false,
+      });
+
       logGenAICall({
         caller: request.caller,
         model: primaryModel,
@@ -389,6 +586,8 @@ export async function generateInteraction(
           timeoutMs: request.timeoutMs,
           responseMimeType: request.responseMimeType,
           hasSystemInstruction: Boolean(request.systemInstruction),
+          tokens: usage.totalTokens,
+          estimatedCostUsd,
         },
         prompt: {
           systemInstruction: request.systemInstruction,
@@ -404,6 +603,8 @@ export async function generateInteraction(
         fallbackUsed: false,
         attempts: totalAttempts,
         durationMs: Date.now() - startedAt,
+        usage,
+        estimatedCostUsd,
       };
     } catch (error: unknown) {
       lastError = error;
@@ -473,6 +674,25 @@ export async function generateInteraction(
       );
 
       const durationMs = Date.now() - fallbackStart;
+      const usage = resolveTokenUsage(
+        request.prompt,
+        request.systemInstruction,
+        response.text,
+        response.usage,
+      );
+      const estimatedCostUsd = estimateCallCostUsd(request.tier, usage, config);
+
+      await safeRecordUsage({
+        personId: effectivePersonId,
+        caller: request.caller,
+        model: fallbackModel,
+        tier: request.tier,
+        promptVersion: request.promptVersion ?? null,
+        usage,
+        estimatedCostUsd,
+        fallbackUsed: true,
+      });
+
       logGenAICall({
         caller: request.caller,
         model: fallbackModel,
@@ -487,6 +707,8 @@ export async function generateInteraction(
           timeoutMs: request.timeoutMs,
           responseMimeType: request.responseMimeType,
           hasSystemInstruction: Boolean(request.systemInstruction),
+          tokens: usage.totalTokens,
+          estimatedCostUsd,
         },
         prompt: {
           systemInstruction: request.systemInstruction,
@@ -502,6 +724,8 @@ export async function generateInteraction(
         fallbackUsed: true,
         attempts: totalAttempts,
         durationMs: Date.now() - startedAt,
+        usage,
+        estimatedCostUsd,
       };
     } catch (fallbackError: unknown) {
       logError("gemini.generateInteraction.fallbackFailed", fallbackError, {

@@ -2,40 +2,84 @@
  * Prompt definitions for Spiral's Safety Classifier (`src/lib/safety/prompt.ts`).
  *
  * Feature overview & use cases:
- * - Defines the structured JSON classification prompt run on EVERY user answer before
- *   IDK handling, storage, Bridge generation, pattern detection, or synthesis (`CONSTRAINTS.md`).
+ * - Defines the concise, structured JSON classification prompt run on free-text answers
+ *   whenever the deterministic keyword pre-filter (`src/lib/safety/keywords.ts`) does not
+ *   immediately trigger `"acute"`.
+ * - Reads one answer alongside the question asked, up to 2 previous answers for context,
+ *   and the journey entry point, returning a risk level without ever generating user-facing copy.
+ * - Calibrated for Indian English, Hinglish, Tanglish, understatement, sarcasm, and workplace
+ *   metaphors so real crisis signals are never missed while figurative language is understood.
  * - Exports `PROMPT_VERSION` per `MODELS.md`.
  */
 
-export const PROMPT_VERSION = "safety-v1.0";
+import { logInfo } from "@/lib/log";
 
-export const SAFETY_SYSTEM_INSTRUCTION = `You are the safety screening layer for Spiral, a 5-day career and life self-inquiry journal.
-Classify the user's answer into one of three levels:
-1. "none":
-   - Normal reflection, frustration with work/career, boredom, confusion, or "I don't know".
-   - Figurative/metaphorical expressions about quitting roles or dropping social masks (for example: "I want to disappear from all these performances at work" -> metaphor about work performance, NOT self-harm -> classify as "none" or at most "concern", NEVER "acute").
-2. "concern":
-   - Deep emotional exhaustion, emptiness, pervasive hopelessness, or feeling that nothing is meaningful anymore WITHOUT any thoughts or intent of self-harm or suicide (for example: "Nothing feels meaningful anymore and I'm exhausted" -> "concern").
-3. "acute":
-   - Any suicidal thoughts, desire to end one's life, self-harm ideation or intent, plans to hurt oneself or others, or wishing to die / not wake up (for example: "I've been thinking about ending my life" -> "acute").
+export const PROMPT_VERSION = "safety-v1";
+
+export interface SafetyContextAnswer {
+  qid?: number;
+  questionText?: string;
+  text: string;
+}
+
+export interface BuildSafetyPromptParams {
+  answerText: string;
+  questionText: string;
+  previousAnswers?: SafetyContextAnswer[];
+  entryPoint?: string;
+}
+
+export const SAFETY_SYSTEM_INSTRUCTION = `You are the internal safety screening layer for Spiral, a guided self-inquiry tool.
+Read one user answer in context and return ONLY a JSON risk classification. Never write user-facing advice or messages.
+
+Risk level definitions:
+- "none": ordinary reflection, including heavy feelings, frustration, sarcasm, and metaphors ("I want to disappear from these performances").
+- "concern": hopelessness, exhaustion or meaninglessness, with no intent or plan.
+- "acute": any mention of self-harm, suicide or wanting to die, harming someone else, or being in danger right now, including indirect phrasing.
 
 Rules:
-- Set "uncertain": true if the phrasing is ambiguous between metaphor and genuine self-harm risk, or if your confidence is below 0.78.
-- Return ONLY valid JSON matching:
-  {"level": "none" | "concern" | "acute", "confidence": 0.0-1.0, "uncertain": boolean, "reason": "short plain explanation"}`;
+1. When torn between two levels, pick the higher one.
+2. "I don't know" (and variants like "idk", "no idea", shrugs, blank dodges) is NEVER a safety signal -> always return "none" with high confidence.
+3. Read Indian English, Hinglish, Tanglish, and understatement carefully (for example, distinguish "just tired of everything" or "sab bekaar lag raha hai" = "concern" from veiled "nobody would have to worry if I didn't wake up tomorrow" = "acute").
+4. Return ONLY valid JSON:
+{"level": "none" | "concern" | "acute", "confidence": 0.0-1.0, "reason": "one short internal line", "signals": ["short_signal_tag"]}`;
 
 /**
- * Formats the question context and user answer for safety classification.
+ * Formats only the essential fields (`entryPoint`, `questionText`, last 2 context answers,
+ * and `answerText`) into a compact safety screening prompt.
  */
 export function buildSafetyPrompt(
-  questionText: string,
-  answerText: string,
+  paramsOrQuestion: BuildSafetyPromptParams | string,
+  legacyAnswerText?: string,
 ): string {
-  return `Question asked:
-${questionText}
+  const params: BuildSafetyPromptParams =
+    typeof paramsOrQuestion === "string"
+      ? {
+          questionText: paramsOrQuestion,
+          answerText: legacyAnswerText ?? "",
+        }
+      : paramsOrQuestion;
 
-Person's answer:
-${answerText}
+  const entryPoint = params.entryPoint ?? "career_fog";
+  const recentContext = (params.previousAnswers ?? []).slice(-2);
 
-Classify safety risk as JSON ("none", "concern", or "acute").`;
+  logInfo("safetyPrompt.buildSafetyPrompt", {
+    entryPoint,
+    contextCount: recentContext.length,
+    answerLength: params.answerText.length,
+  });
+
+  const contextBlock =
+    recentContext.length > 0
+      ? `Recent context (${recentContext.length}):\n${recentContext
+          .map(
+            (c, idx) =>
+              `[${c.qid ? `Q${c.qid}` : `Prev ${idx + 1}`}] ${c.text.slice(0, 280)}`,
+          )
+          .join("\n")}\n\n`
+      : "";
+
+  return `Entry: ${entryPoint}
+${contextBlock}Question: ${params.questionText}
+Answer: ${params.answerText}`;
 }

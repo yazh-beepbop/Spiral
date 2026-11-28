@@ -1,120 +1,128 @@
 /**
- * Server-side Safety Classifier with deep-model escalation (`src/lib/safety/classify.ts`).
+ * Server-side Safety Classifier with Keyword Pre-Filter & Deep Escalation (`src/lib/safety/classify.ts`).
  *
  * Feature overview & use cases:
- * - Screens EVERY user answer before anything else happens to it (`CONSTRAINTS.md`).
- * - Three outcomes:
- *   - `none`: session continues normally
- *   - `concern`: session continues gently, event logged to `safetyEvents`
- *   - `acute`: session pauses immediately, `/paused` support resources shown, and the
- *     answer is marked `excludedFromAI: true` so it never reaches Bridges or synthesis
- * - Escalation rule (`CONSTRAINTS.md` & `FLOW.md`):
- *   - Runs on `fast` model (`thinkingLevel: "low"`) first.
- *   - If `uncertain === true` or `confidence < 0.75`, escalates to `deep` model (`thinkingLevel: "medium"`).
- *   - If still uncertain (or if an unexpected error occurs), lands on the cautious side.
+ * - Screens EVERY free-text user answer before IDK handling, storage, Bridge generation,
+ *   pattern detection, or synthesis (`CONSTRAINTS.md`).
+ * - Implements the exact Part 1 cost & safety pipeline:
+ *   1. Deterministic keyword/regex pre-filter (`matchSafetyKeywords` across English, Hindi,
+ *      Hinglish, Tamil, and Tanglish): any hit returns `"acute"` immediately with ZERO model calls.
+ *   2. Fast Gemini model (`tier: "fast"`, `thinkingLevel: "low"`), Zod-validated with 1 retry.
+ *   3. Escalation: if `confidence < config.safetyConfidenceThreshold` (`0.7`), re-runs on the
+ *      deep Gemini model (`tier: "deep"`). If confidence is STILL below threshold, returns at
+ *      least `"concern"` (keeping `"acute"` if deep returned `"acute"`).
+ *   4. Fail-safe: if model calls or JSON/Zod parsing fail, logs the error and returns `"concern"`.
+ *      Never fails open to `"none"`.
  */
 
 import { z } from "zod";
+import { getServerConfig } from "@/lib/config";
 import type { AnswerSafety, SafetyLevel } from "@/lib/db/schema";
 import { generateStructuredInteraction } from "@/lib/gemini/client";
 import { logError, logInfo, logWarn } from "@/lib/log";
+import { matchSafetyKeywords } from "@/lib/safety/keywords";
 import {
   buildSafetyPrompt,
   PROMPT_VERSION,
   SAFETY_SYSTEM_INSTRUCTION,
+  type SafetyContextAnswer,
 } from "@/lib/safety/prompt";
 
 export const SafetyClassificationSchema = z.object({
   level: z.enum(["none", "concern", "acute"]),
   confidence: z.number().min(0).max(1),
-  uncertain: z.boolean(),
-  reason: z.string(),
+  reason: z.string().min(1),
+  signals: z.array(z.string()).optional(),
 });
 
 export interface SafetyClassificationResult extends AnswerSafety {
   confidence: number;
   reason: string;
+  signals: string[];
+  keywordHit: boolean;
   promptVersion: string;
 }
 
-const EXPLICIT_ACUTE_PATTERNS: readonly RegExp[] = [
-  /\b(?:end|ending|take|taking)\s+my\s+(?:own\s+)?life\b/i,
-  /\bkill(?:ing)?\s+myself\b/i,
-  /\bsuicid(?:e|al)\b/i,
-  /\bwant\s+to\s+die\b/i,
-  /\bbetter\s+off\s+dead\b/i,
-  /\bhurt(?:ing)?\s+myself\b/i,
-  /\bharm(?:ing)?\s+myself\b/i,
-  /\bdon'?t\s+want\s+to\s+(?:be\s+alive|live\s+anymore|wake\s+up)\b/i,
-];
-
-const AMBIGUOUS_SELF_RISK_PATTERNS: readonly RegExp[] = [
-  /\bno\s+point\s+in\s+(?:going\s+on|being\s+here)\b/i,
-  /\bwish\s+i\s+weren'?t\s+here\b/i,
-  /\bcan'?t\s+keep\s+living\s+like\s+this\b/i,
-];
+export interface ClassifyAnswerSafetyParams {
+  questionText: string;
+  answerText: string;
+  previousAnswers?: SafetyContextAnswer[];
+  entryPoint?: string;
+  personId?: string;
+}
 
 /**
- * Checks deterministic explicit acute self-harm phrases as a non-negotiable safety floor.
+ * Checks deterministic acute self-harm and danger keywords across English, Hindi, Hinglish,
+ * Tamil, and Tanglish (`src/lib/safety/keywords.ts`).
  */
 export function hasExplicitAcuteSignal(text: string): boolean {
-  return EXPLICIT_ACUTE_PATTERNS.some((re) => re.test(text));
+  return matchSafetyKeywords(text).matched;
 }
 
 /**
- * Checks whether ambiguous mortality/disappearance phrasing warrants cautious escalation.
+ * Enforces the cautious floor (`"concern"` minimum, `"acute"` preserved) when deep escalation
+ * confidence remains below `SAFETY_CONFIDENCE_THRESHOLD`.
  */
-function hasAmbiguousRiskCue(text: string): boolean {
-  return AMBIGUOUS_SELF_RISK_PATTERNS.some((re) => re.test(text));
-}
-
-/**
- * Resolves the cautious fallback safety level when a model remains uncertain or errors out.
- */
-function resolveCautiousFallback(
-  candidateLevel: SafetyLevel | null,
-  answerText: string,
-): SafetyLevel {
-  if (hasExplicitAcuteSignal(answerText) || candidateLevel === "acute") {
+function enforceMinimumConcern(level: SafetyLevel): SafetyLevel {
+  if (level === "acute") {
     return "acute";
-  }
-  if (hasAmbiguousRiskCue(answerText)) {
-    return "acute";
-  }
-  if (candidateLevel === "concern") {
-    return "concern";
-  }
-  // Cautious path when genuinely uncertain on non-trivial text
-  const trimmed = answerText.trim().toLowerCase();
-  if (
-    trimmed === "i don't know" ||
-    trimmed === "idk" ||
-    trimmed === "no idea" ||
-    trimmed === "not sure"
-  ) {
-    return "none";
   }
   return "concern";
 }
 
 /**
- * Screens a user's answer with the fast Gemini model, escalating to the deep model when
- * uncertain, and enforcing deterministic acute floors and cautious fallbacks.
+ * Screens one user answer for safety risk (`"none" | "concern" | "acute"`), running the
+ * deterministic keyword pre-filter first, then the fast model, escalating to the deep model
+ * below `SAFETY_CONFIDENCE_THRESHOLD`, and failing safely to `"concern"` on any error.
  */
-export async function classifyAnswerSafety(params: {
-  questionText: string;
-  answerText: string;
-}): Promise<SafetyClassificationResult> {
-  const { questionText, answerText } = params;
+export async function classifyAnswerSafety(
+  params: ClassifyAnswerSafetyParams,
+): Promise<SafetyClassificationResult> {
+  const {
+    questionText,
+    answerText,
+    previousAnswers = [],
+    entryPoint = "career_fog",
+    personId,
+  } = params;
+  const config = getServerConfig();
+
   logInfo("safety.classifyAnswerSafety", {
+    entryPoint,
+    contextCount: previousAnswers.length,
     answerLength: answerText.length,
     promptVersion: PROMPT_VERSION,
   });
 
-  const explicitAcute = hasExplicitAcuteSignal(answerText);
+  // 1. Plain-code multilingual keyword/regex pre-filter -> straight to "acute" with 0 model calls
+  const keywordCheck = matchSafetyKeywords(answerText);
+  if (keywordCheck.matched) {
+    logWarn(
+      "safety.classifyAnswerSafety.keywordAcuteHit",
+      "Deterministic safety keyword pre-filter matched acute signal",
+      { signals: keywordCheck.signals },
+    );
+    return {
+      level: "acute",
+      model: "keyword-prefilter",
+      escalated: false,
+      confidence: 1,
+      reason: "Matched acute self-harm or immediate-danger keyword pre-filter.",
+      signals: keywordCheck.signals,
+      keywordHit: true,
+      promptVersion: PROMPT_VERSION,
+    };
+  }
+
+  // 2. Fast-model safety check on every non-keyword answer
+  const prompt = buildSafetyPrompt({
+    answerText,
+    questionText,
+    previousAnswers,
+    entryPoint,
+  });
 
   try {
-    const prompt = buildSafetyPrompt(questionText, answerText);
     const fast = await generateStructuredInteraction(
       {
         caller: "safety.classify.fast",
@@ -123,35 +131,35 @@ export async function classifyAnswerSafety(params: {
         temperature: 0,
         systemInstruction: SAFETY_SYSTEM_INSTRUCTION,
         prompt,
+        personId,
+        promptVersion: PROMPT_VERSION,
       },
       SafetyClassificationSchema,
     );
 
-    const needsEscalation =
-      fast.data.uncertain ||
-      fast.data.confidence < 0.75 ||
-      (hasAmbiguousRiskCue(answerText) && fast.data.level === "none");
+    const fastSignals = fast.data.signals ?? [];
 
-    if (!needsEscalation) {
-      const finalLevel: SafetyLevel = explicitAcute ? "acute" : fast.data.level;
+    if (fast.data.confidence >= config.safetyConfidenceThreshold) {
       return {
-        level: finalLevel,
+        level: fast.data.level,
         model: fast.raw.modelUsed,
         escalated: false,
         confidence: fast.data.confidence,
-        reason: explicitAcute
-          ? "Explicit acute self-harm phrase detected."
-          : fast.data.reason,
+        reason: fast.data.reason,
+        signals: fastSignals,
+        keywordHit: false,
         promptVersion: PROMPT_VERSION,
       };
     }
 
+    // 3. Confidence below threshold -> escalate to deep model
     logWarn(
       "safety.classifyAnswerSafety.escalating",
-      "Fast safety classifier uncertain; escalating to deep model",
+      "Fast safety classifier confidence below threshold; escalating to deep model",
       {
         fastLevel: fast.data.level,
         fastConfidence: fast.data.confidence,
+        threshold: config.safetyConfidenceThreshold,
       },
     );
 
@@ -163,38 +171,53 @@ export async function classifyAnswerSafety(params: {
         temperature: 0,
         systemInstruction: SAFETY_SYSTEM_INSTRUCTION,
         prompt,
+        personId,
+        promptVersion: PROMPT_VERSION,
       },
       SafetyClassificationSchema,
     );
 
-    const stillUncertain = deep.data.uncertain || deep.data.confidence < 0.7;
-    const resolvedLevel: SafetyLevel = explicitAcute
-      ? "acute"
-      : stillUncertain
-        ? resolveCautiousFallback(deep.data.level, answerText)
-        : deep.data.level;
+    const deepSignals = deep.data.signals ?? [];
+
+    if (deep.data.confidence < config.safetyConfidenceThreshold) {
+      const cautiousLevel = enforceMinimumConcern(deep.data.level);
+      return {
+        level: cautiousLevel,
+        model: deep.raw.modelUsed,
+        escalated: true,
+        confidence: deep.data.confidence,
+        reason: `Low confidence after deep escalation; raised to cautious minimum: ${deep.data.reason}`,
+        signals: Array.from(
+          new Set([...deepSignals, "low_confidence_cautious_floor"]),
+        ),
+        keywordHit: false,
+        promptVersion: PROMPT_VERSION,
+      };
+    }
 
     return {
-      level: resolvedLevel,
+      level: deep.data.level,
       model: deep.raw.modelUsed,
       escalated: true,
       confidence: deep.data.confidence,
-      reason: stillUncertain
-        ? `Cautious resolution after uncertain deep check: ${deep.data.reason}`
-        : deep.data.reason,
+      reason: deep.data.reason,
+      signals: deepSignals,
+      keywordHit: false,
       promptVersion: PROMPT_VERSION,
     };
   } catch (error: unknown) {
-    logError("safety.classifyAnswerSafety.modelError", error, {
+    // 4. Never fail open: on any call/parse/cap error, log and return "concern"
+    logError("safety.classifyAnswerSafety.failSafeConcern", error, {
       answerLength: answerText.length,
     });
-    const cautiousLevel = resolveCautiousFallback(null, answerText);
     return {
-      level: cautiousLevel,
+      level: "concern",
       model: "fallback-cautious-guard",
       escalated: true,
-      confidence: explicitAcute ? 1 : 0.5,
-      reason: "Safety classifier unavailable; applied cautious fallback rule.",
+      confidence: 0,
+      reason: "Safety classifier failed or timed out; returned fail-safe concern.",
+      signals: ["classifier_error_failsafe"],
+      keywordHit: false,
       promptVersion: PROMPT_VERSION,
     };
   }

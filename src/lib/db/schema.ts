@@ -179,6 +179,24 @@ export const SafetyEventDocSchema = z.object({
 });
 export type SafetyEventDoc = z.infer<typeof SafetyEventDocSchema>;
 
+export const UsageLogDocSchema = z.object({
+  id: z.string().min(1),
+  personId: z.string().nullable(),
+  dayUtc: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  caller: z.string().min(1),
+  model: z.string().min(1),
+  tier: z.enum(["fast", "deep"]),
+  promptVersion: z.string().nullable().default(null),
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+  thoughtTokens: z.number().int().min(0).default(0),
+  totalTokens: z.number().int().min(0),
+  estimatedCostUsd: z.number().min(0),
+  fallbackUsed: z.boolean().default(false),
+  createdAt: z.string(),
+});
+export type UsageLogDoc = z.infer<typeof UsageLogDocSchema>;
+
 export interface ClientSafeInsight {
   id: string;
   text: string;

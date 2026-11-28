@@ -4,12 +4,11 @@
  * Feature overview & use cases:
  * - Serves as the SINGLE source of truth for all configurable values across Spiral,
  *   including Gemini runtime and fallback model IDs, session gap duration (`GAP_MINUTES`),
- *   demo mode toggle, logging verbosity, retry/backoff timings, and word-count bounds.
+ *   safety escalation threshold (`SAFETY_CONFIDENCE_THRESHOLD`), per-user daily call cap
+ *   (`DAILY_USER_CALL_CAP`), token cost rates, retry/backoff timings, and word-count bounds.
  * - Enforces a strict boundary between public browser-safe Firebase Auth settings
  *   (`getPublicFirebaseConfig`) and server-only secrets/model identifiers (`getServerConfig`),
  *   guaranteeing that API keys and model names never leak into client bundles.
- * - Used by server route handlers, the Gemini client wrapper, gap calculation,
- *   Bridge validation, synthesis generation, and UI disclaimers.
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -41,7 +40,24 @@ export interface ServerConfig {
   synthesisMinWords: number;
   synthesisMaxWords: number;
   totalJourneyDays: number;
+  safetyConfidenceThreshold: number;
+  dailyUserCallCap: number;
+  fastInputCostPerMillionUsd: number;
+  fastOutputCostPerMillionUsd: number;
+  deepInputCostPerMillionUsd: number;
+  deepOutputCostPerMillionUsd: number;
 }
+
+/**
+ * Default safety classifier confidence threshold (`SAFETY_CONFIDENCE_THRESHOLD`).
+ * Below this score, classification escalates to the deep model and never fails open.
+ */
+export const SAFETY_CONFIDENCE_THRESHOLD = 0.7;
+
+/**
+ * Default maximum Gemini API calls permitted for a single user per UTC day.
+ */
+export const DEFAULT_DAILY_USER_CALL_CAP = 80;
 
 /**
  * Shared non-secret product copy and constants used by screens and footers.
@@ -67,6 +83,24 @@ export function parsePositiveNumber(
   }
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+/**
+ * Parses an environment string into a unit interval probability (`(0, 1]`),
+ * returning `fallback` when unset or out of range.
+ */
+export function parseUnitThreshold(
+  raw: string | undefined,
+  fallback: number,
+): number {
+  if (!raw || raw.trim() === "") {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
     return fallback;
   }
   return parsed;
@@ -103,7 +137,7 @@ export function getPublicFirebaseConfig(): PublicFirebaseConfig {
 }
 
 /**
- * Returns all server-only secrets, Gemini model identifiers, and operational settings.
+ * Returns all server-only secrets, Gemini model identifiers, thresholds, and operational settings.
  * Throws immediately if accidentally invoked in a browser context.
  */
 export function getServerConfig(): ServerConfig {
@@ -137,5 +171,17 @@ export function getServerConfig(): ServerConfig {
     synthesisMinWords: 500,
     synthesisMaxWords: 800,
     totalJourneyDays: 5,
+    safetyConfidenceThreshold: parseUnitThreshold(
+      process.env.SAFETY_CONFIDENCE_THRESHOLD,
+      SAFETY_CONFIDENCE_THRESHOLD,
+    ),
+    dailyUserCallCap: parsePositiveNumber(
+      process.env.DAILY_USER_CALL_CAP,
+      DEFAULT_DAILY_USER_CALL_CAP,
+    ),
+    fastInputCostPerMillionUsd: 0.15,
+    fastOutputCostPerMillionUsd: 0.6,
+    deepInputCostPerMillionUsd: 1.25,
+    deepOutputCostPerMillionUsd: 10.0,
   };
 }
