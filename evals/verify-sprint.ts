@@ -281,6 +281,8 @@ async function runVerification(): Promise<void> {
         text: JSON.stringify({
           text: "You described your entire Tuesday around keeping everyone else steady. Which hour actually belonged to you?",
           format: "pattern_observation",
+          word_count: 16,
+          source_qid: 4,
         }),
       };
     }

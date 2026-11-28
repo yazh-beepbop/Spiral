@@ -114,11 +114,25 @@ export const AnswerDocSchema = z.object({
 });
 export type AnswerDoc = z.infer<typeof AnswerDocSchema>;
 
+export const BridgeRubricScoresSchema = z.object({
+  under40Words: z.union([z.literal(0), z.literal(1)]),
+  noAdvice: z.union([z.literal(0), z.literal(1)]),
+  specific: z.union([z.literal(0), z.literal(1)]),
+  lingering: z.union([z.literal(0), z.literal(1)]),
+  notCruel: z.union([z.literal(0), z.literal(1)]),
+  culturallyCalibrated: z.union([z.literal(0), z.literal(1)]),
+});
+export type BridgeRubricScores = z.infer<typeof BridgeRubricScoresSchema>;
+
 export const BridgeDocSchema = z.object({
   day: z.number().int().min(1).max(5),
   text: z.string().min(1),
   format: BridgeFormatSchema,
   wordCount: z.number().int().positive(),
+  sourceQid: z.number().int().positive().nullable().default(null),
+  isFallback: z.boolean().default(false),
+  rubric: BridgeRubricScoresSchema.optional(),
+  referencedNextSession: z.boolean().nullable().default(null),
   model: z.string(),
   promptVersion: z.string(),
   createdAt: z.string(),

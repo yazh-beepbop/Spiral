@@ -662,7 +662,13 @@ export async function listJourneyAnswers(
 export async function saveBridge(
   personId: string,
   journeyId: string,
-  bridge: Omit<BridgeDoc, "createdAt"> & { createdAt?: string },
+  bridge: Omit<
+    BridgeDoc,
+    "createdAt" | "sourceQid" | "isFallback" | "referencedNextSession"
+  > &
+    Partial<
+      Pick<BridgeDoc, "sourceQid" | "isFallback" | "referencedNextSession">
+    > & { createdAt?: string },
 ): Promise<BridgeDoc> {
   const validated = BridgeDocSchema.parse({
     ...bridge,

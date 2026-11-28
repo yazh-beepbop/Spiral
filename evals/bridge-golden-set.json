@@ -133,5 +133,32 @@
     "format": "reframe_question",
     "bridge": "Deep down, aren't you really scared of what happens if nobody needs you?",
     "sampleAnswers": []
+  },
+  {
+    "id": "bad-example-generic",
+    "source": "bad_example_negative",
+    "expectValid": false,
+    "day": 1,
+    "format": "reframe_question",
+    "bridge": "What would make you happy?",
+    "sampleAnswers": []
+  },
+  {
+    "id": "bad-example-advice-try",
+    "source": "bad_example_negative",
+    "expectValid": false,
+    "day": 2,
+    "format": "pattern_observation",
+    "bridge": "Try journaling about this tonight?",
+    "sampleAnswers": []
+  },
+  {
+    "id": "bad-example-cruel",
+    "source": "bad_example_negative",
+    "expectValid": false,
+    "day": 3,
+    "format": "belief_challenge",
+    "bridge": "Why do you keep lying to yourself?",
+    "sampleAnswers": []
   }
 ]

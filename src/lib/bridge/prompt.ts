@@ -2,63 +2,108 @@
  * Prompt definitions for Spiral's signature Bridge Question (`src/lib/bridge/prompt.ts`).
  *
  * Feature overview & use cases:
- * - Crafts the end-of-day prompt sent to the `deep` model (`thinkingLevel: "medium"`) using
- *   ONLY today's safety-screened answers (`excludedFromAI === false`).
- * - Enforces all `Design.md` Section 6 rules:
- *   1. One single line, strictly under 40 words
- *   2. Zero advice ("you should", "try to", "make sure", instructions)
- *   3. Screenshot-safe: captures the emotional/structural pattern without exposing raw
- *      identifying names, employers, or private details
- *   4. One of three formats: `pattern_observation`, `belief_challenge`, or `reframe_question`
- * - Exports `PROMPT_VERSION` as required by `MODELS.md`.
+ * - Crafts the concise end-of-day prompt sent to the `deep` model using ONLY today's
+ *   safety-screened answers (`excludedFromAI === false`), day number/theme, previous Bridges
+ *   (to prevent repetition), and `crisisType` when detected.
+ * - Includes all 6 benchmark Bridges from `Design.md` Section 6 labelled by format, plus
+ *   3 explicit negative examples (generic, advice, cruel) with failure reasons.
+ * - Exports `PROMPT_VERSION` per `MODELS.md`.
  */
 
-import type { AnswerDoc } from "@/lib/db/schema";
+import type { AnswerDoc, BridgeDoc, CrisisType } from "@/lib/db/schema";
+import { logInfo } from "@/lib/log";
 
-export const PROMPT_VERSION = "bridge-v1.1";
+export const PROMPT_VERSION = "bridge-v1";
 
-export const BRIDGE_SYSTEM_INSTRUCTION = `You write the end-of-day Bridge Question for Spiral, a calm, logical, unbiased clarity guide (not a chatbot or companion).
-The Bridge Question is ONE plain-spoken line left with the person before a 10-hour gap.
+export interface BuildBridgePromptParams {
+  day: number;
+  dayTitle: string;
+  todaysAnswers: AnswerDoc[];
+  previousBridges?: Array<Pick<BridgeDoc, "day" | "text" | "format">>;
+  crisisType?: CrisisType | null;
+}
 
-Hard rules (violating any rule fails the output):
-1. ONE single line, strictly UNDER 40 words (aim for 16 to 30 words). Plain-spoken, neutral, warm, not poetic. Short sentences. Zero flattery.
-2. NO opinions, NO taking sides, NO advice, NO instructions. Never use "you should", "try to", "make sure", "consider", "take time to", "remember to", or imperative commands.
-3. End with a question mark ("?"). It must be a question, or a sharp, warm observation that ends in a question.
-4. Screenshot-safe: never repeat private proper nouns, employer names, or raw identifying details from their answers. Reflect the underlying pattern or tension instead.
-5. No clinical or therapy jargon ("burnout", "people-pleasing", "trauma", "coping mechanism", "limiting belief").
-6. NO LEADING QUESTIONS OR UNDUE INFLUENCE: Never use "isn't it true", "don't you think", "wouldn't you say", or "deep down", and NEVER attribute an unexpressed feeling, fear, or motive that the person did not state in their own words. Explore openly; do not test a hypothesis.
-7. Culturally calibrated (including Indian family/duty nuances): never mock gratitude or cast family as villains.
-8. Choose the strongest format for today's answers:
-   - "pattern_observation": notices something striking in how they answered (or what they left out)
-   - "belief_challenge": gently names an unspoken rule they live by and asks where it started
-   - "reframe_question": turns their dilemma a quarter-turn
+export const BRIDGE_SYSTEM_INSTRUCTION = `You write the end-of-day Bridge Question for Spiral, a calm, unbiased self-inquiry clarity guide.
+The Bridge Question is ONE line left with the person before a 10-hour gap.
 
-Benchmark examples of great Bridges:
-- "You described your entire life without using the word 'enjoy' once. Was that deliberate, or did you just notice?" (pattern_observation)
-- "I notice you described rest as something you earn, not something you deserve. Where did that belief start?" (belief_challenge)
-- "What if the answer was never a career? What if it was a life, and the work just had to fit inside it?" (reframe_question)
+Hard rules (violating any fails validation):
+1. ONE single line, strictly UNDER 40 words, ending with "?".
+2. NO advice, NO instructions: never use "you should", "try", "try to", "make sure", "consider", "remember to", or commands.
+3. NO clinical words, diagnoses, or internal pattern names ("burnout", "people-pleasing", "toxic positivity", "limiting belief", "coping mechanism", "over-intellectualizing", "self-minimization").
+4. Screenshot-safe: never expose private names, employer names, or raw identifying details.
+5. No leading tags ("isn't it true", "don't you think", "wouldn't you say", "deep down").
+
+Quality rules:
+- Reference something ONLY this person said today; echo their own words where natural.
+- Notice what is missing as well as what is present (for example, never using the word "enjoy").
+- Warm, plain-spoken, never cruel or shaming. Culturally calibrated (honor family care without mocking gratitude).
+- Never repeat themes or phrasing from previous Bridges.
+
+Good examples (labelled by format):
+1. [pattern_observation] "You described your entire life without using the word 'enjoy' once. Was that deliberate, or did you just notice?"
+2. [pattern_observation] "The things that make you feel most alive are the things you've stopped making time for. What replaced them, and why did you let it?"
+3. [pattern_observation] "You listed five worlds where you performed. Then whispered the one where you were real. Why does the real one get the smallest voice?"
+4. [reframe_question] "You want to disappear from the performances. But you still want to be seen. Just not like this. What would 'being seen right' actually look like?"
+5. [reframe_question] "What if the answer was never a career? What if it was a life, and the work just had to fit inside it?"
+6. [belief_challenge] "I notice you described rest as something you earn, not something you deserve. Where did that belief start?"
+
+Bad examples (DO NOT write like these):
+- Generic: "What would make you happy?" -> Fails: generic; could apply to anyone and references nothing specific this person said.
+- Advice: "Try journaling about this tonight." -> Fails: gives advice/instruction ("Try...") instead of leaving a lingering question.
+- Cruel: "Why do you keep lying to yourself?" -> Fails: cruel and accusatory instead of warm and curious.
 
 Return ONLY valid JSON:
-{"text": "Your single-line Bridge Question ending with ?", "format": "pattern_observation" | "belief_challenge" | "reframe_question"}`;
+{"text": "Single-line Bridge under 40 words ending with ?", "format": "pattern_observation" | "belief_challenge" | "reframe_question", "word_count": number, "source_qid": number | null}`;
 
 /**
- * Formats today's non-excluded answers into a Bridge generation prompt for Day `day`.
+ * Formats today's non-excluded answers, day theme, prior Bridges, and optional `crisisType`
+ * into a concise Bridge generation prompt.
  */
 export function buildBridgePrompt(
-  day: number,
-  dayTitle: string,
-  todaysAnswers: AnswerDoc[],
+  paramsOrDay: BuildBridgePromptParams | number,
+  legacyDayTitle?: string,
+  legacyTodaysAnswers?: AnswerDoc[],
 ): string {
-  const renderedAnswers = todaysAnswers
+  const params: BuildBridgePromptParams =
+    typeof paramsOrDay === "number"
+      ? {
+          day: paramsOrDay,
+          dayTitle: legacyDayTitle ?? "",
+          todaysAnswers: legacyTodaysAnswers ?? [],
+        }
+      : paramsOrDay;
+
+  const safeAnswers = params.todaysAnswers.filter((a) => !a.excludedFromAI);
+  const priorBridges = params.previousBridges ?? [];
+
+  logInfo("bridgePrompt.buildBridgePrompt", {
+    day: params.day,
+    answerCount: safeAnswers.length,
+    priorBridgeCount: priorBridges.length,
+    hasCrisisType: Boolean(params.crisisType),
+  });
+
+  const answersBlock = safeAnswers
     .map(
       (a) =>
-        `[Q${a.qid}] ${a.questionText}\nAnswer${a.idkFlagged ? " (person could not answer after 3 tries)" : ""}: ${a.text}`,
+        `[Q${a.qid}] ${a.questionText}\nAnswer${a.idkFlagged ? " (left open after 3 IDKs)" : ""}: ${a.text}`,
     )
     .join("\n\n");
 
-  return `Day ${day} of 5 (${dayTitle}) — Today's answers ONLY:
+  const priorBlock =
+    priorBridges.length > 0
+      ? `\nPrevious Bridges (do NOT repeat):\n${priorBridges
+          .map((b) => `- Day ${b.day} (${b.format}): ${b.text}`)
+          .join("\n")}\n`
+      : "";
 
-${renderedAnswers}
+  const crisisLine = params.crisisType
+    ? `\nDetected crisis context (internal only, never print label): ${params.crisisType}\n`
+    : "";
 
-Write today's Bridge Question as JSON ({"text": "...", "format": "..."}). Strictly under 40 words, one line, zero advice, screenshot-safe, ending with a question mark.`;
+  return `Day ${params.day} of 5 · ${params.dayTitle}${crisisLine}${priorBlock}
+Today's answers:
+${answersBlock}
+
+Return JSON {"text", "format", "word_count", "source_qid"}.`;
 }

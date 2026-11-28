@@ -18,6 +18,7 @@ import {
   getBridgeForDay,
   getLatestJourney,
   listDayAnswers,
+  listJourneyBridges,
   saveBridge,
   updateJourney,
   updateSession,
@@ -26,6 +27,10 @@ import {
   UnauthorizedError,
   verifyRequestPersonId,
 } from "@/lib/firebase/admin";
+import {
+  DailyCallCapExceededError,
+  runWithUsageContext,
+} from "@/lib/gemini/client";
 import { computeNextUnlockAt, evaluateGapLock } from "@/lib/journey/gap";
 import { getQuestionsForDay } from "@/lib/journey/questions";
 import { logError, logInfo } from "@/lib/log";
@@ -112,16 +117,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const generated = await generateDayBridge({
-      day,
-      answers: todaysAnswers,
-    });
+    const priorBridges = (await listJourneyBridges(personId, journey.id)).filter(
+      (b) => b.day < day,
+    );
+
+    const generated = await runWithUsageContext({ personId }, () =>
+      generateDayBridge({
+        day,
+        answers: todaysAnswers,
+        previousBridges: priorBridges,
+        crisisType: journey.crisisType,
+        personId,
+      }),
+    );
 
     const savedBridge = await saveBridge(personId, journey.id, {
       day,
       text: generated.text,
       format: generated.format,
       wordCount: generated.wordCount,
+      sourceQid: generated.sourceQid,
+      isFallback: generated.isFallback,
+      rubric: generated.rubric,
+      referencedNextSession: generated.referencedNextSession,
       model: generated.model,
       promptVersion: generated.promptVersion,
     });
@@ -172,6 +190,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (error: unknown) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof DailyCallCapExceededError) {
+      return NextResponse.json({ error: error.message }, { status: 429 });
     }
     logError("api.bridge.error", error);
     return NextResponse.json(

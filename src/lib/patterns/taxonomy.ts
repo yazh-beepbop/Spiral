@@ -318,6 +318,51 @@ const FORBIDDEN_LABEL_REPLACEMENTS: ReadonlyArray<{
     labelName: "embodiment deprivation",
     replacement: "missing physical, hands-on life away from screens",
   },
+  {
+    pattern: /\bhumor[-_ ]as[-_ ]deflection\b/gi,
+    labelName: "humor as deflection",
+    replacement: "turning tender moments into a joke",
+  },
+  {
+    pattern: /\bself[-_ ]minimization\b/gi,
+    labelName: "self-minimization",
+    replacement: "making the truest part of your week sound small",
+  },
+  {
+    pattern: /\bjoy[-_ ]disconnection\b/gi,
+    labelName: "joy disconnection",
+    replacement: "losing touch with what genuinely feels fun",
+  },
+  {
+    pattern: /\bvalues[-_ ]behavio(?:u)?r[-_ ]gap\b/gi,
+    labelName: "values-behavior gap",
+    replacement: "the gap between what matters to you and how your week ran",
+  },
+  {
+    pattern: /\bprestige[-_ ]equals[-_ ]worth\b/gi,
+    labelName: "prestige equals worth",
+    replacement: "tying your worth to titles and brand names",
+  },
+  {
+    pattern: /\bproductivity[-_ ]equals[-_ ]value\b/gi,
+    labelName: "productivity equals value",
+    replacement: "measuring yourself through output alone",
+  },
+  {
+    pattern: /\brest[-_ ]equals[-_ ]failure\b/gi,
+    labelName: "rest equals failure",
+    replacement: "treating rest as something you have to earn",
+  },
+  {
+    pattern: /\bclass[-_ ]transition[-_ ]stress\b/gi,
+    labelName: "class transition stress",
+    replacement: "carrying the weight of moving between two worlds",
+  },
+  {
+    pattern: /\bperforming[-_ ]for[-_ ]spiral\b/gi,
+    labelName: "performing for spiral",
+    replacement: "writing as if an audience were grading your reflection",
+  },
 ];
 
 /**
