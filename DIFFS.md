@@ -12,6 +12,8 @@ One row per approved change. Only add a row after `CHECKLIST.md` passes and the 
 | 6 | 2026-11-27 | T3–T4, T7–T9 | `src/lib/journey/*`, `src/lib/bridge/*`, `src/app/session/*`, `src/app/bridge/*`, `src/app/api/{session,answer,bridge}` | `90d4694` | `t9-working` | Yes | Antigravity (Gemini 4 Carbon) |
 | 7 | 2026-11-27 | T10–T11 | `src/lib/patterns/*`, `src/lib/synthesis/*`, `src/lib/demo/seed.ts`, `src/app/{page,start,synthesis}/*`, `evals/*` | `a8ca658` | `t10-working` | Yes | Antigravity (Gemini 4 Carbon) |
 | 8 | 2026-11-27 | Clarity guide spec | `Design.md`, `CONSTRAINTS.md` | `03cf64e` | | Yes | Antigravity (Gemini 4 Carbon) |
+| 9 | 2026-11-28 | Synthesis safety net | `src/lib/{config,gemini/client,patterns/detect,synthesis/generate,db/*,demo/seed}.ts`, `src/app/{api/synthesis,synthesis}/*` | `f40a55a` | | Yes | Antigravity (Gemini 4 Carbon) |
+| 10 | 2026-11-28 | Voice & Language (`voice-and-language`) | `src/lib/i18n/*`, `src/lib/gemini/transcribe.ts`, `src/components/{Language*,VoiceMic*}`, `src/app/api/{voice/transcribe,settings}/route.ts`, `src/app/**`, `src/lib/safety/*`, `evals/*` | `f94bc63` | | Yes | Antigravity (Gemini 4 Carbon) |
 
 ## How to fill it fast
 

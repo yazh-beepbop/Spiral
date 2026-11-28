@@ -5,7 +5,7 @@ Agents: read this first in every new chat. Update it at the end of every session
 ## Right now
 
 - **Date:** 28 Nov 2026 (Gemini 4 Sprint, Bengaluru)
-- **Branch:** `voice-and-language` (branched cleanly off `main` `f40a55a`; `main` and the demo build untouched)
+- **Branch:** `voice-and-language` (feature commit `f94bc63`, branched cleanly off `main` `f40a55a`; `main` and the demo build untouched)
 - **Current task:** Voice Input (stateless Gemini STT) + Language Option (`en`, `hinglish`, `hi`, `ta`) complete, tested end-to-end, committed, and pushed
 - **Demo mode:** `GAP_MINUTES=2`, `DEMO_MODE=true`
 
