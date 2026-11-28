@@ -39,6 +39,9 @@ The Must list is ordered so a working demo exists as early as possible. Do not s
 - [x] **T10. Day 5 synthesis.** Structured pattern map (zod-validated), then synthesis per `Design.md`. "Did this land?" per insight.
   Done when: synthesis is 500 to 800 words, quotes the person's own words, shows no pattern labels, and feedback saves.
 
+- [x] **P1 to P4: core prompts.** Rules-first safety pre-filter + `safety-v1` classifier & 26-case eval set (`P1`); rules-first `idk-v1` detector + Standard/Gentle escalation with fixed lines & 15-case eval set (`P2`); `bridge-v1` prompt with 6 benchmarks, 3 negative examples, rubric, `referencedNextSession`, and 5 daily fallbacks (`P3`); `patterns-v1` multi-day quote map + `synthesis-v1` 6-part reflection with existential safety re-check & 3 synthetic 5-day journeys (`P4`); token/cost usage telemetry + `DAILY_USER_CALL_CAP`.
+  Done when: mocked tests and `CHECKLIST.md` pass per part across four atomic commits on `core-prompts`, and `npm run evals -- --live` enforces a 300-call guard.
+
 - [ ] **T11. Deploy + demo seed.** Google Cloud Run deploy (replacing Firebase App Hosting per sprint decision). A seeded demo journey with Days 1 to 4 complete.
   Done when: the live URL runs Day 5 for the demo journey end to end. *(Demo seeder + Cloud Run `Dockerfile` built & verified locally; ready for `gcloud run deploy`.)*
 

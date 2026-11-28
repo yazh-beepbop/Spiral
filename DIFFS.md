@@ -12,6 +12,10 @@ One row per approved change. Only add a row after `CHECKLIST.md` passes and the 
 | 6 | 2026-11-27 | T3–T4, T7–T9 | `src/lib/journey/*`, `src/lib/bridge/*`, `src/app/session/*`, `src/app/bridge/*`, `src/app/api/{session,answer,bridge}` | `90d4694` | `t9-working` | Yes | Antigravity (Gemini 4 Carbon) |
 | 7 | 2026-11-27 | T10–T11 | `src/lib/patterns/*`, `src/lib/synthesis/*`, `src/lib/demo/seed.ts`, `src/app/{page,start,synthesis}/*`, `evals/*` | `a8ca658` | `t10-working` | Yes | Antigravity (Gemini 4 Carbon) |
 | 8 | 2026-11-27 | Clarity guide spec | `Design.md`, `CONSTRAINTS.md` | `03cf64e` | | Yes | Antigravity (Gemini 4 Carbon) |
+| 9 | 2026-11-28 | P1: safety check | `src/lib/config.ts`, `src/lib/db/{schema,repository}.ts`, `src/lib/gemini/client.ts`, `src/lib/safety/{keywords,prompt,classify}.ts`, `src/app/api/answer/route.ts`, `evals/{safety-set.json,test-p1-safety.ts}` | `4264052` | | Yes | Antigravity (Gemini 4 Carbon) |
+| 10 | 2026-11-28 | P2: IDK handling | `src/lib/journey/{idk-prompt,idk}.ts`, `src/app/api/answer/route.ts`, `evals/{idk-set.json,test-p2-idk.ts,verify-sprint.ts}` | `3712ef0` | | Yes | Antigravity (Gemini 4 Carbon) |
+| 11 | 2026-11-28 | P3: Bridge prompt | `src/lib/bridge/{prompt,generate,fallbacks}.ts`, `src/lib/db/{schema,repository}.ts`, `src/lib/patterns/taxonomy.ts`, `src/app/api/bridge/route.ts`, `evals/{bridge-golden-set.json,test-p3-bridge.ts,verify-sprint.ts}` | `9c7cb61` | | Yes | Antigravity (Gemini 4 Carbon) |
+| 12 | 2026-11-28 | P4: pattern map & synthesis | `src/lib/patterns/{prompt,detect}.ts`, `src/lib/synthesis/{prompt,generate}.ts`, `src/lib/db/{schema,repository}.ts`, `src/app/api/synthesis/route.ts`, `evals/journeys/{burnout,identity,already-knows}.json`, `evals/{test-p4-synthesis.ts,verify-sprint.ts}` | `5a71189` | | Yes | Antigravity (Gemini 4 Carbon) |
 
 ## How to fill it fast
 

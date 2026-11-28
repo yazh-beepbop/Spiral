@@ -2,42 +2,34 @@
 
 Two parts: the models Spiral calls at runtime, and the AI agents that built each part of the code.
 
-## Part 1: runtime models
+## Part 1: runtime models & prompt versions
 
-Model IDs live only in `src/lib/config.ts` (read from env). Confirm current IDs with the Gemini skill before T1. All calls use the Interactions API through `src/lib/gemini/client.ts`.
+Model IDs and thresholds live only in `src/lib/config.ts` (read from env). All calls use the `@google/genai` Interactions API through `src/lib/gemini/client.ts`, which enforces `DAILY_USER_CALL_CAP` and logs model, token counts, and estimated USD cost to `usage` (with zero answer text).
 
-| Job | Model | Why | Output |
-|---|---|---|---|
-| Safety classification on every answer | Fast: `gemini-4-hydrogen` | Runs on every turn, so speed and cost matter | JSON: `level` (none, concern, acute), `confidence`, `reason` |
-| Safety escalation when uncertain | Deep: `gemini-4-argon` | A second opinion on the hard cases | Same JSON |
-| "I don't know" detection | Fast | Simple classification | JSON: `isIdk`, `variant` |
-| Next-question flow, small follow-ups | Fast | Live and conversational | Text |
-| Adaptive questions (L3) | Deep | Must reference earlier answers precisely | Text, one question |
-| Bridge Question | Deep | The signature moment. Quality matters most here | JSON: `text`, `format` |
-| Pattern map (Day 5) | Deep | Reads the whole journey, returns structure | JSON validated by zod |
-| Synthesis (Day 5) | Deep | 500 to 800 words in the person's own words | Text + insights array |
+| Job | Prompt file & `PROMPT_VERSION` | Model (`config.ts`) | Escalation / Retry cap | Output |
+|---|---|---|---|---|
+| Safety keyword pre-filter | `src/lib/safety/keywords.ts` (rules) | Plain code (`0` calls on hit) | Immediate `"acute"` on EN / HI / Hinglish / TA / Tanglish hit | `{ matched, signals }` |
+| Safety classification | `src/lib/safety/prompt.ts` (`safety-v1`) | Fast: `gemini-4-hydrogen` (`thinkingLevel: "low"`) | If `confidence < 0.7` (`SAFETY_CONFIDENCE_THRESHOLD`), re-runs on Deep: `gemini-4-argon`; if still `< 0.7` or error, returns at least `"concern"` | JSON: `level` (`none` \| `concern` \| `acute`), `confidence`, `reason`, `signals` |
+| IDK detection | `src/lib/journey/idk-prompt.ts` (`idk-v1`) | Rules first -> Fast: `gemini-4-hydrogen` only if unsure | 1 Zod retry, then accepts answer | JSON: `isIdk`, `type` (`plain` \| `disguised` \| `real_short_answer`) |
+| IDK Step-1 smaller question | `src/lib/journey/idk-prompt.ts` (`idk-v1`) | Fixed `Design.md` redirect for QIDs `7, 17, 18, 27, 28`; Fast: `gemini-4-hydrogen` for other QIDs | Step 2 & Step 3 are fixed strings (0 model calls) | JSON: `redirect` (1 open sentence) |
+| Adaptive questions (L3) | `src/lib/journey/adaptive-prompt.ts` (`adaptive-l3-v1.1`) | Deep: `gemini-4-argon` (`thinkingLevel: "medium"`) | 1 neutrality retry, then neutral fallback | Text, one open question |
+| Bridge Question | `src/lib/bridge/prompt.ts` (`bridge-v1`) | Deep only: `gemini-4-argon` (`thinkingLevel: "medium"`) | Max 1 generation + 1 retry per day, else `src/lib/bridge/fallbacks.ts` | JSON: `text`, `format`, `word_count`, `source_qid` + saved 6-point rubric |
+| Pattern map (Day 5) | `src/lib/patterns/prompt.ts` (`patterns-v1`) | Deep only: `gemini-4-argon` (`thinkingLevel: "medium"`) | Max 1 generation + 1 retry (`>= 2` quotes across different days) | JSON: `patterns`, `crisis_type`, `contradictions`, `unanswered_qids`, `already_knows` |
+| Synthesis (Day 5) | `src/lib/synthesis/prompt.ts` (`synthesis-v1`) | Deep only: `gemini-4-argon` (`thinkingLevel: "medium"`) | Max 1 generation + 1 retry, cached in Firestore (`synthesis/main`); re-runs `safety-v1` when `crisis_type === "existential"` | JSON: `text` (500–800w) + `insights` array (`id`, `text`, `landed`) |
 
-**Fallbacks:** fast falls back to `gemini-3.8-flash`, deep falls back to `gemini-3.1-pro-preview`. If Argon is slow or overloaded during the demo, Hydrogen is a reasonable stand-in for Bridges too. Set it in config, do not edit code.
-
-**Thinking level:** low for safety and IDK checks, medium for Bridges and adaptive questions, high for the pattern map and synthesis. Tune if latency hurts the demo.
-
-**Prompt versions:** every prompt file exports a `PROMPT_VERSION`. Bridges and syntheses save it, so the eval harness can compare versions.
+**Fallbacks:** general fast calls fall back to `gemini-3.8-flash`; general deep calls fall back to `gemini-3.1-pro-preview`. Bridge, Pattern Map, and Synthesis strictly cap deep calls (`1 + 1 retry`) per cost rules.
 
 ## Part 2: build log (which agent built what)
-
-Fill this in as you go. It tells you which tool to go back to when a part breaks.
 
 | Subsystem | Built with (tool + model) | Date | Notes |
 |---|---|---|---|
 | Scaffold, config, logging | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T0: Next.js standalone App Router, `src/lib/config.ts`, `src/lib/log.ts`, PWA manifest + SW |
 | Gemini client | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T1: `@google/genai` Interactions API (`ai.interactions.create`), 503 retry + fallback |
 | Auth + Firestore rules | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T2: `firestore.rules`, Firebase Auth + Cloud Run HMAC session, person-rooted schema |
-| Question bank | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T3: Career Fog QIDs 1–28, Opener, L3 templates, custom IDK redirects |
+| Question bank | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T3: Career Fog QIDs 1–29, Opener, L3 templates, custom IDK redirects |
 | Session screen | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T4/T9: `/session`, `/api/session/current`, `/api/answer`, adaptive L3 (`adaptive.ts`) |
-| Safety layer | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T5: `classify.ts` (fast -> deep escalation), `/paused`, `excludedFromAI=true` |
-| IDK rule | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T6: `idk.ts` Standard Mode 3-step escalation |
-| Bridge | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T7: `bridge/generate.ts` (`<40w`, no advice, retry), `/bridge`, golden set evals |
-| Gap | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T8: Server-time `gap.ts` + monotonic countdown on `/bridge` |
-| Synthesis | Antigravity (Gemini 4 Carbon) | 2026-11-27 | T10: `patterns/detect.ts` + `synthesis/generate.ts` + `/synthesis` feedback |
 | UI and styling | Antigravity (Gemini 4 Carbon) | 2026-11-27 | All 7 screens (`Landing`, `Start`, `Session`, `Bridge`, `Locked`, `Synthesis`, `Paused`) + Cloud Run `Dockerfile` |
-| Design mockups (Stitch) | | | |
+| P1: Safety check & usage cap | Antigravity (Gemini 4 Carbon) | 2026-11-28 | `keywords.ts` (EN/HI/Hinglish/TA/Tanglish), `safety-v1`, `<0.7` escalation + `"concern"` fail-safe, `usage` telemetry + `DAILY_USER_CALL_CAP`, 26-case `evals/safety-set.json` |
+| P2: IDK detection & escalation | Antigravity (Gemini 4 Carbon) | 2026-11-28 | Rules-first `idk-v1` (`plain` / `disguised` / `real_short_answer`), fixed Step-2 rotation + Gentle Mode switch + `"Okay. We'll leave that one open."`, 15-case `evals/idk-set.json` |
+| P3: Bridge prompt & fallbacks | Antigravity (Gemini 4 Carbon) | 2026-11-28 | `bridge-v1` (6 benchmarks + 3 negative examples), Section 8 label/advice/word checks, 6-point rubric, `referencedNextSession`, `fallbacks.ts` |
+| P4: Pattern map & synthesis | Antigravity (Gemini 4 Carbon) | 2026-11-28 | `patterns-v1` + `synthesis-v1` (6-part structure, quoted-user-text label masking, existential safety re-check) + 3 synthetic journeys in `evals/journeys/` |
