@@ -140,10 +140,32 @@ export const BridgeDocSchema = z.object({
 export type BridgeDoc = z.infer<typeof BridgeDocSchema>;
 
 export const PatternEvidenceSchema = z.object({
+  qid: z.number().int().positive().optional(),
+  day: z.number().int().min(1).max(5).optional(),
   answerPath: z.string().min(1),
   quote: z.string().min(1),
 });
 export type PatternEvidence = z.infer<typeof PatternEvidenceSchema>;
+
+export const PatternContradictionSchema = z.object({
+  stated_value: z.string().min(1),
+  actual_behaviour: z.string().min(1),
+  value_quote: z.object({
+    qid: z.number().int().positive(),
+    quote: z.string().min(1),
+  }),
+  behaviour_quote: z.object({
+    qid: z.number().int().positive(),
+    quote: z.string().min(1),
+  }),
+});
+export type PatternContradiction = z.infer<typeof PatternContradictionSchema>;
+
+export const AlreadyKnowsSchema = z.object({
+  value: z.boolean(),
+  answer: z.string().nullable(),
+});
+export type AlreadyKnows = z.infer<typeof AlreadyKnowsSchema>;
 
 export const PatternFlagDocSchema = z.object({
   id: z.string().min(1),
@@ -177,7 +199,7 @@ export const SynthesisDocSchema = z.object({
 export type SynthesisDoc = z.infer<typeof SynthesisDocSchema>;
 
 export const DemoSynthesisCacheDocSchema = z.object({
-  crisisType: CrisisTypeSchema,
+  crisisType: CrisisTypeSchema.nullable(),
   flags: z.array(PatternFlagDocSchema).min(1),
   synthesis: SynthesisDocSchema,
   updatedAt: z.string(),

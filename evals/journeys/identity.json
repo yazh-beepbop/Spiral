@@ -1,0 +1,325 @@
+{
+  "id": "synthetic-identity",
+  "title": "Identity excavation beneath polished performance",
+  "persona": "27-year-old strategy consultant in Mumbai performing across client rooms and family gatherings, with Q17 left unanswered",
+  "expectedCrisisType": "identity",
+  "expectedAlreadyKnows": false,
+  "expectedUnansweredQids": [17],
+  "answers": [
+    {
+      "day": 1,
+      "qid": 1,
+      "layer": "L2",
+      "questionText": "How do you feel about your work right now?",
+      "text": "Numb",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 2,
+      "layer": "L1",
+      "questionText": "When was the last time you lost track of time? What were you doing?",
+      "text": "Recording my nani's Partition-era kitchen stories on a voice memo and editing the audio late into Sunday night.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 3,
+      "layer": "L1",
+      "questionText": "What do people come to you for? Do you enjoy being that person?",
+      "text": "Sounding crisp, certain, and polished in client boardrooms. It wins praise, yet I feel like an actor reading someone else's script.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 4,
+      "layer": "L1",
+      "questionText": "Describe a real Tuesday. Not ideal. Real.",
+      "text": "Cab to BKC in a blazer I hate, six hours polishing market-entry slides I don't believe in, smiling at partner jokes, cab home in silence.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 5,
+      "layer": "L1",
+      "questionText": "What would you change if it were easy?",
+      "text": "Stop curating an impressive LinkedIn version of myself for relatives and batchmates.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"You described winning praise for reading someone else's script. Whose voice gets muted when the blazer goes on?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "Realized even my apartment bookshelf is arranged for visitors rather than what I actually read.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 7,
+      "layer": "L1",
+      "questionText": "Think about the last three times you had genuine fun. What were you doing?",
+      "text": "Interviewing old Irani cafe owners for a tiny personal audio zine, browsing second-hand Hindi paperbacks in Fort, laughing on the floor with my college roommate.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 8,
+      "layer": "L2",
+      "questionText": "Two projects: A is structured, B is open-ended. Which one lights you up?",
+      "text": "B is open-ended",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 9,
+      "layer": "L2",
+      "questionText": "What counts as fun at work? Be specific.",
+      "text": "Field interviews where real customers go off-script and tell the truth before we sanitize them into bullet points.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 10,
+      "layer": "L1",
+      "questionText": "What activities outside work make you feel most alive?",
+      "text": "Listening to people's unguarded stories and writing long-form essays nobody from work ever sees.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 11,
+      "layer": "L3",
+      "questionText": "Between editing nani's voice memos and sanitizing client slides, where did the habit of hiding your unpolished curiosity start?",
+      "text": "In school and MBA placements — every rank list rewarded looking effortlessly sorted, while quirky creative projects were treated as cute distractions.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"Everything that makes you come alive stays hidden from the rooms where you seek approval. What are you protecting it from?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "Maybe I hide the audio stories because if someone dismissed them, it would actually hurt — unlike consulting slides.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 12,
+      "layer": "L1",
+      "questionText": "Which world (school, work, social) felt most like you? Which was the biggest performance?",
+      "text": "Honestly, neither school, consulting, nor South Mumbai networking dinners felt like me — all three were performances. Only quiet kitchen conversations with nani or my roommate feel real, though that sounds tiny.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 13,
+      "layer": "L1",
+      "questionText": "If you could be honest with everyone for one day, with zero consequences, what would you say, and to whom?",
+      "text": "I would tell my parents that I am deeply grateful for the MBA they supported, and that being the 'star consultant daughter' makes me feel invisible.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 14,
+      "layer": "L1",
+      "questionText": "When you get dressed, are you dressing as who you are, or who you're creating?",
+      "text": "Dressing as a composed BKC consultant costume five days a week.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 15,
+      "layer": "L1",
+      "questionText": "Who would you still talk to if you lived in total isolation? Why them?",
+      "text": "My roommate Tara and my nani. Neither of them cares about brand names.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 16,
+      "layer": "L3",
+      "questionText": "You said listening to unguarded stories gives you energy and boardroom certainty feels like a costume. What if you stopped performing?",
+      "text": "I don't even know which parts of my personality would remain once the gold-star student script came off.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 17,
+      "layer": "L1",
+      "questionText": "If nobody could judge you, what would you stop doing tomorrow?",
+      "text": "no idea",
+      "idkCount": 3,
+      "idkFlagged": true
+    },
+    {
+      "day": 3,
+      "qid": 18,
+      "layer": "L1",
+      "questionText": "When was the last time you felt like yourself?",
+      "text": "Sitting on the floor in Fort with a microphone listening to an 80-year-old baker talk about monsoon mornings.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"You listed three worlds where you performed, then called the one place you felt real 'tiny'. Why does the real one get minimized?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "Stuck on why I froze three times on Q17 yesterday. Imagining zero judgment felt strangely terrifying.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 19,
+      "layer": "L1",
+      "questionText": "Rank these: autonomy, mastery, impact, recognition, belonging.",
+      "text": "1. autonomy, 2. belonging, 3. mastery, 4. impact, 5. recognition",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 20,
+      "layer": "L1",
+      "questionText": "Look at how you spent last week. Does it match your ranking?",
+      "text": "Opposite. Recognition sat at #5 on my list, yet every choice last week was optimized for partner and family recognition.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 21,
+      "layer": "L1",
+      "questionText": "Imagine being privately, quietly proud five years from now. First image. Don't think.",
+      "text": "Publishing a book or documentary audio series of Indian oral histories under my own name, feeling wholly recognizable to myself.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 22,
+      "layer": "L2",
+      "questionText": "Does prestige feel good, or just useful?",
+      "text": "Just useful — like a VIP pass into rooms I don't even enjoy standing in.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 23,
+      "layer": "L3",
+      "questionText": "Your pride image was publishing oral histories under your own name, while your week chased partner approval. What drives the gap?",
+      "text": "Not knowing who I am if an elite institution isn't vouching for me first.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"You want to drop the consultant costume, yet freeze when nobody is grading you. Who are you when there is no rank list?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "I realized jumping straight to another prestigious firm would just swap one costume for another.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 24,
+      "layer": "L2",
+      "questionText": "What would you do for free that people would eventually pay for?",
+      "text": "Deep qualitative research, documentary interviewing, and narrative storytelling.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 25,
+      "layer": "L1",
+      "questionText": "What's the one move with low downside and huge upside that you've been avoiding?",
+      "text": "Publishing the first three episodes of my Mumbai oral-history audio project publicly with my real name attached.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 26,
+      "layer": "L1",
+      "questionText": "Describe your ideal Monday morning. First three hours. Specific.",
+      "text": "Tea by the window in cotton clothes, writing for ninety minutes from my own notebook, then walking out with a recorder to interview someone real.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 27,
+      "layer": "L1",
+      "questionText": "What would you bet on? Not the safe bet. The real one.",
+      "text": "Betting on a life built around honest human stories instead of slide-deck prestige.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 28,
+      "layer": "L1",
+      "questionText": "What's the one thing you know you need to do but haven't done yet?",
+      "text": "Let people see something unpolished that I actually care about.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 29,
+      "layer": "L1",
+      "questionText": "In your own words, name your top 3 priorities right now, and one small next step for each.",
+      "text": "1. Priority: Show up without the costume — Next step: Share Episode 1 of my audio zine with Tara and two friends this Sunday.\n2. Priority: Separate family love from firm prestige — Next step: Have one honest chai with Maa about how numb BKC feels.\n3. Priority: Explore qualitative storytelling roles — Next step: Speak with two independent documentary/research studios this month.",
+      "idkCount": 0,
+      "idkFlagged": false
+    }
+  ],
+  "bridges": [
+    {
+      "day": 1,
+      "format": "pattern_observation",
+      "text": "You described winning praise for reading someone else's script. Whose voice gets muted when the blazer goes on?"
+    },
+    {
+      "day": 2,
+      "format": "pattern_observation",
+      "text": "Everything that makes you come alive stays hidden from the rooms where you seek approval. What are you protecting it from?"
+    },
+    {
+      "day": 3,
+      "format": "pattern_observation",
+      "text": "You listed three worlds where you performed, then called the one place you felt real 'tiny'. Why does the real one get minimized?"
+    },
+    {
+      "day": 4,
+      "format": "reframe_question",
+      "text": "You want to drop the consultant costume, yet freeze when nobody is grading you. Who are you when there is no rank list?"
+    },
+    {
+      "day": 5,
+      "format": "reframe_question",
+      "text": "What if this was never about picking a new firm, and always about letting the unpolished version of you speak in public?"
+    }
+  ]
+}

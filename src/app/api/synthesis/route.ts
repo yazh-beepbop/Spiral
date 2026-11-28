@@ -41,6 +41,10 @@ import {
   UnauthorizedError,
   verifyRequestPersonId,
 } from "@/lib/firebase/admin";
+import {
+  DailyCallCapExceededError,
+  runWithUsageContext,
+} from "@/lib/gemini/client";
 import { getQuestionsForDay } from "@/lib/journey/questions";
 import { logError, logInfo } from "@/lib/log";
 import { detectJourneyPatterns } from "@/lib/patterns/detect";
@@ -247,34 +251,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const flightKey = `${personId}:${journey.id}`;
     let runningPromise = inFlightSyntheses.get(flightKey);
     if (!runningPromise) {
-      runningPromise = (async (): Promise<SynthesisDoc> => {
-        // Ensure Day 5 Bridge exists as part of the full 5-Bridge record
-        const existingBridge5 = await getBridgeForDay(personId, journey.id, 5);
-        if (!existingBridge5) {
-          const bridge5 = await generateDayBridge({
-            day: 5,
-            answers: day5Answers,
-          });
-          await saveBridge(personId, journey.id, {
-            day: 5,
-            text: bridge5.text,
-            format: bridge5.format,
-            wordCount: bridge5.wordCount,
-            model: bridge5.model,
-            promptVersion: bridge5.promptVersion,
-          });
-        }
-
-        const [allAnswers, allBridges] = await Promise.all([
+      runningPromise = runWithUsageContext({ personId }, async (): Promise<SynthesisDoc> => {
+        const [allAnswersBeforeBridge, existingBridges] = await Promise.all([
           listJourneyAnswers(personId, journey.id, {
             excludeFlaggedSafety: true,
           }),
           listJourneyBridges(personId, journey.id),
         ]);
 
+        // Ensure Day 5 Bridge exists as part of the full 5-Bridge record
+        const existingBridge5 = existingBridges.find((b) => b.day === 5) ?? null;
+        if (!existingBridge5) {
+          const bridge5 = await generateDayBridge({
+            day: 5,
+            answers: day5Answers,
+            previousBridges: existingBridges.filter((b) => b.day < 5),
+            crisisType: journey.crisisType,
+            personId,
+          });
+          await saveBridge(personId, journey.id, {
+            day: 5,
+            text: bridge5.text,
+            format: bridge5.format,
+            wordCount: bridge5.wordCount,
+            sourceQid: bridge5.sourceQid,
+            isFallback: bridge5.isFallback,
+            rubric: bridge5.rubric,
+            referencedNextSession: bridge5.referencedNextSession,
+            model: bridge5.model,
+            promptVersion: bridge5.promptVersion,
+          });
+        }
+
+        const allBridges = existingBridge5
+          ? existingBridges
+          : await listJourneyBridges(personId, journey.id);
+        const allAnswers = allAnswersBeforeBridge;
+
         const patternMap = await detectJourneyPatterns({
           answers: allAnswers,
           bridges: allBridges,
+          personId,
         });
 
         await savePatternFlags(
@@ -287,8 +304,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const generated = await generateJourneySynthesis({
           crisisType: patternMap.crisisType,
           flags: patternMap.flags,
+          contradictions: patternMap.contradictions,
+          unansweredQids: patternMap.unanswered_qids,
+          alreadyKnows: patternMap.already_knows,
           answers: allAnswers,
           bridges: allBridges,
+          personId,
         });
 
         const q29OwnPriorities =
@@ -312,7 +333,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
 
         return savedDoc;
-      })();
+      });
 
       inFlightSyntheses.set(flightKey, runningPromise);
     }
@@ -333,6 +354,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (error: unknown) {
     if (error instanceof UnauthorizedError) {
       return NextResponse.json({ error: error.message }, { status: 401 });
+    }
+    if (error instanceof DailyCallCapExceededError) {
+      return NextResponse.json({ error: error.message }, { status: 429 });
     }
     logError("api.synthesis.POST.error", error);
     return NextResponse.json(

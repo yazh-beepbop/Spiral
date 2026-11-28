@@ -2,140 +2,206 @@
  * Prompt builder for Day 5 Synthesis (`src/lib/synthesis/prompt.ts`).
  *
  * Feature overview & use cases:
- * - Crafts the Day 5 synthesis prompt for the `deep` model (`thinkingLevel: "high"`),
- *   enforcing `Design.md` Sections 1, 7 & 7b and `CONSTRAINTS.md`:
- *   1. Role & tone: calm, logical, unbiased clarity guide (not a chatbot or companion);
- *      plain-spoken, neutral, warm, not poetic; short sentences; zero flattery; never gives
- *      opinions, takes sides, or offers advice.
- *   2. 500 to 800 words (`text`), hedged plain language, zero clinical/taxonomy labels.
- *   3. NEVER suggests priorities, directions, or actions itself. May reflect the user's
- *      self-written Q29 priorities/steps back and ask `"Is this yours, or was it handed to you?"`.
- *   4. 3 to 5 `insights`, each quoting `>= 2` verbatim answers from `>= 2` distinct pre-Bridge
- *      days AND stating one explicit alternative reading (`"Or it may simply be that..."`).
+ * - Implements Part 4 Synthesis prompt on the `deep` model:
+ *   1. Sends ONLY the structured pattern map and relevant quotes (plus any unanswered QID
+ *      text and user-written Q29 priorities), keeping prompt token usage tight (`COST RULES`).
+ *   2. Enforces the exact 6-part structure in order:
+ *      (1) Opening in their words -> (2) 3 to 5 insights -> (3) Contradictions ->
+ *      (4) The unanswered question (if flagged) -> (5) 2 to 3 possible open directions
+ *      grounded strictly in their own words -> (6) A warm close that ends the journey.
+ *   3. Shapes framing by `crisis_type` (`burnout` -> rest before direction; `identity` ->
+ *      selfhood, not job titles; `existential` -> gentle grounding; `already_knows.value` ->
+ *      centers their own stated answer).
+ *   4. Outputs each insight separately with an ID/patternKey so `/synthesis` renders
+ *      `"Did this land?"` controls writing to `insights[].landed`.
+ * - Exports `PROMPT_VERSION` per `MODELS.md`.
  */
 
 import type {
+  AlreadyKnows,
   AnswerDoc,
   BridgeDoc,
   CrisisType,
+  PatternContradiction,
   PatternFlagDoc,
 } from "@/lib/db/schema";
+import { CAREER_FOG_QUESTIONS } from "@/lib/journey/questions";
 import { logInfo } from "@/lib/log";
 import { extractDayFromAnswerPath } from "@/lib/patterns/detect";
 
-export const PROMPT_VERSION = "synthesis-v1.2";
+export const PROMPT_VERSION = "synthesis-v1";
 
-export const SYNTHESIS_SYSTEM_INSTRUCTION = `You write the closing Day 5 reflection for Spiral.
-Spiral is a calm, logical, unbiased anchor — a clarity guide, not a chatbot or companion.
+export interface BuildSynthesisPromptParams {
+  crisisType: CrisisType | null;
+  flags: PatternFlagDoc[];
+  contradictions?: PatternContradiction[];
+  unansweredQids?: number[];
+  alreadyKnows?: AlreadyKnows;
+  answers?: Array<AnswerDoc & { day: number }>;
+  bridges?: BridgeDoc[];
+}
+
+export const SYNTHESIS_SYSTEM_INSTRUCTION = `You write the closing Day 5 reflection for Spiral, a calm, plain-spoken self-inquiry clarity guide.
+Pattern keys in the input are for your internal reasoning ONLY and must NEVER appear anywhere in your output text.
+
+STRUCTURE OF "text" (500 to 800 words, in this exact order across 5 to 6 paragraphs separated by "\\n\\n"):
+1. Opening: what this 5-day journey was really about for them, anchored in their own words.
+2. Core threads (3 to 5 insights): reflect the main patterns plainly, quoting their exact words ("...").
+3. Contradictions: reflect the tension between what they value and how their week actually ran, quoting their words.
+4. The unanswered question (include if unanswered_qids is non-empty): weave in "There was a question you could not answer. That silence might be the most important data point of your entire Spiral."
+5. 2 to 3 possible directions: reflect 2 to 3 open, hedged possibilities drawn strictly from their own Day 5 answers — NEVER a single answer, and NEVER prescriptive advice ("you should", "try to", "make sure").
+6. A warm close that ends the journey cleanly (no streaks, no open-ended chat; if Q29 priorities are provided, ask "Is this yours, or was it handed to you?").
 
 NON-NEGOTIABLE RULES:
-1. TONE & ROLE: Plain-spoken, neutral, warm, NOT poetic. Short, clear sentences. Zero flattery. Reflect back what the user said. NEVER give opinions, NEVER take sides, and NEVER offer advice.
-2. WORD COUNT: The main "text" field MUST be between 500 and 800 words (aim for 560 to 680 words), structured into 4 to 6 clear paragraphs separated by "\\n\\n".
-3. NO SUGGESTED PRIORITIES OR ACTIONS: NEVER suggest priorities, career directions, next steps, or actions yourself. The user wrote their own top 3 priorities and next steps on Q29 (which the UI displays verbatim under "In your words"). You may reflect their exact stated priorities back and ask "Is this yours, or was it handed to you?", and nothing more prescriptive than that.
-4. HEDGED FRAMING ONLY: Use humble, non-diagnostic language ("it sounds like", "you might notice", "one possibility is"). Never introduce a feeling, belief, or motive the person did not state in their own words.
-5. ZERO PATTERN LABELS: NEVER write any internal or clinical labels anywhere in "text" or "insights[].text" ("people-pleasing", "people pleaser", "burnout", "burned out", "toxic positivity", "limiting belief", "coping mechanism", "over-intellectualizing", "performative self-awareness", "institutional dependency", "comparison spiral", "childhood conditioning").
-6. INSIGHTS ARRAY (3 to 5 items):
-   - Every insight's "text" MUST include AT LEAST TWO verbatim quotes wrapped in double quotes ("...") from AT LEAST TWO DIFFERENT DAYS written BEFORE that pattern was first hinted at in a Bridge.
-   - Every insight's "text" MUST end with one explicit alternative reading sentence starting with the exact words: "Or it may simply be that..."
-   - Include "evidenceDays": [dayA, dayB] listing the >= 2 distinct pre-Bridge day numbers quoted.
+- Length: "text" MUST be strictly 500 to 800 words.
+- Hedged, non-diagnostic language ONLY ("it sounds like", "you might notice", "one possibility is").
+- Quote their exact words in double quotation marks ("...").
+- ZERO pattern names or clinical labels outside quoted user text ("people-pleasing", "burnout", "burned out", "toxic positivity", "limiting belief", "coping mechanism", "over-intellectualizing", "performative self-awareness", "institutional dependency", "comparison spiral", "childhood conditioning", "self-minimization").
+- INSIGHTS ARRAY (3 to 5 items):
+  - Each item corresponds to one detected pattern ("patternKey" is internal metadata).
+  - Each insight's "text" MUST include at least 2 verbatim quotes ("...") from at least 2 different days AND end with an explicit alternative reading starting with: "Or it may simply be that..."
 
 Return ONLY valid JSON:
 {
-  "text": "500 to 800 word plain-spoken, unbiased reflection...",
+  "text": "500 to 800 word reflection following parts 1..6...",
   "insights": [
     {
-      "patternKey": "pattern_key_from_map",
+      "patternKey": "internal_key",
       "evidenceDays": [1, 3],
-      "text": "Plain-spoken reflection quoting \"first quote from Day 1\" and \"second quote from Day 3\"... Or it may simply be that..."
+      "text": "Plain-spoken insight quoting \"exact words\" and \"second quote\"... Or it may simply be that..."
     }
   ]
 }`;
 
 /**
- * Shapes crisis-type-specific framing instructions without leaking labels or giving advice.
+ * Returns crisis-type and `already_knows` framing instructions per Part 4 rules.
  */
-function getCrisisFramingGuidance(crisisType: CrisisType): string {
+export function buildSynthesisFramingGuidance(
+  crisisType: CrisisType | null,
+  alreadyKnows?: AlreadyKnows,
+): string {
+  const directives: string[] = [];
+
   switch (crisisType) {
     case "burnout":
-      return "FRAMING NOTE: Reflect the contrast between energy and depletion plainly in their own words without using the word 'burnout' or 'burned out' and without giving advice.";
+      directives.push(
+        "CRISIS FRAMING (burnout — NEVER print the word 'burnout' or 'burned out'): Lead with rest, recovery, and energy before career direction.",
+      );
+      break;
     case "identity":
-      return "FRAMING NOTE: Reflect the contrast they described between roles that felt like a performance and moments that felt like themselves, without taking sides.";
+      directives.push(
+        "CRISIS FRAMING (identity): Talk about who they are underneath performances and roles, rather than job titles or career ladders.",
+      );
+      break;
     case "existential":
-      return "FRAMING NOTE: Keep the reflection grounded in concrete, ordinary moments from their own answers rather than abstract speculation.";
+      directives.push(
+        "CRISIS FRAMING (existential): Ground them gently in ordinary, concrete physical moments and human connections they named. Do not excavate into abstract emptiness.",
+      );
+      break;
     case "transition":
-      return "FRAMING NOTE: Reflect the shifting chapters they named plainly and calmly without pushing for premature certainty.";
+      directives.push(
+        "CRISIS FRAMING (transition): Acknowledge that multiple chapters are shifting at once, keeping possibilities calm and unhurried.",
+      );
+      break;
+    default:
+      directives.push(
+        "CRISIS FRAMING: Keep the reflection grounded, calm, and anchored in their own contrasts.",
+      );
+      break;
   }
+
+  if (alreadyKnows?.value && alreadyKnows.answer) {
+    directives.push(
+      `ALREADY KNOWS RULE: They already named what they know they need to do ("${alreadyKnows.answer}"). Reflect their own answer back as the central direction alongside gentle open context, rather than inventing new options.`,
+    );
+  }
+
+  return directives.join("\n");
 }
 
 /**
- * Builds the Day 5 synthesis prompt with pre-Bridge multi-day evidence and user-written Q29 priorities.
+ * Builds a compact Day 5 synthesis prompt sending ONLY the pattern map, exact quotes,
+ * contradictions, unanswered QID context, and Q29 user-written priorities.
  */
-export function buildSynthesisPrompt(params: {
-  crisisType: CrisisType;
-  flags: PatternFlagDoc[];
-  answers: Array<AnswerDoc & { day: number }>;
-  bridges: BridgeDoc[];
-}): string {
-  const { crisisType, flags, answers, bridges } = params;
-  logInfo("synthesisPrompt.buildSynthesisPrompt", {
+export function buildSynthesisPrompt(params: BuildSynthesisPromptParams): string {
+  const {
     crisisType,
+    flags,
+    contradictions = [],
+    answers = [],
+    alreadyKnows,
+  } = params;
+
+  const unansweredQids =
+    params.unansweredQids ??
+    Array.from(new Set(answers.filter((a) => a.idkFlagged).map((a) => a.qid)));
+
+  logInfo("synthesisPrompt.buildSynthesisPrompt", {
+    crisisType: crisisType ?? "none",
     flagCount: flags.length,
-    answerCount: answers.length,
+    contradictionCount: contradictions.length,
+    unansweredCount: unansweredQids.length,
+    alreadyKnows: Boolean(alreadyKnows?.value),
   });
 
-  const hasFlaggedIdk = answers.some((a) => a.idkFlagged);
-  const q29Answer = answers.find((a) => a.qid === 29);
+  const framingBlock = buildSynthesisFramingGuidance(crisisType, alreadyKnows);
 
-  const patternSummary = flags
+  const patternsBlock = flags
     .map((f) => {
-      const quotesWithDays = f.evidence
-        .map((e) => {
-          const dayNum = extractDayFromAnswerPath(e.answerPath);
-          return `[Day ${dayNum ?? "?"}] "${e.quote}"`;
+      const quotes = f.evidence
+        .map((ev) => {
+          const d = ev.day ?? extractDayFromAnswerPath(ev.answerPath) ?? "?";
+          return `[Day ${d}${ev.qid ? ` · Q${ev.qid}` : ""}] "${ev.quote}"`;
         })
         .join(" | ");
-      return `- Internal key (DO NOT print key): ${f.patternKey} | First hinted in Bridge: ${f.firstBridgeHintDay ? `Day ${f.firstBridgeHintDay}` : "never"}\n  Pre-Bridge multi-day quotes to cite: ${quotesWithDays}`;
+      return `- Reasoning key (NEVER write key in output): ${f.patternKey} (${f.category})\n  Quotes: ${quotes}`;
     })
     .join("\n");
 
-  const journeyTranscript = answers
-    .map(
-      (a) =>
-        `[Day ${a.day} · Q${a.qid}] ${a.questionText}\nAnswer${a.idkFlagged ? " (could not answer after 3 tries)" : ""}: ${a.text}`,
-    )
-    .join("\n\n");
+  const contradictionsBlock =
+    contradictions.length > 0
+      ? contradictions
+          .map(
+            (c) =>
+              `- Value (${c.stated_value}): [Q${c.value_quote.qid}] "${c.value_quote.quote}" vs Behaviour (${c.actual_behaviour}): [Q${c.behaviour_quote.qid}] "${c.behaviour_quote.quote}"`,
+          )
+          .join("\n")
+      : answers
+          .filter((a) => a.qid === 19 || a.qid === 20 || a.qid === 22)
+          .map((a) => `[Day ${a.day} · Q${a.qid}] "${a.text}"`)
+          .join("\n") || "Use tensions visible across the pattern quotes above.";
 
-  const bridgeTranscript = bridges
-    .map((b) => `End of Day ${b.day} Bridge: ${b.text}`)
+  const unansweredBlock =
+    unansweredQids.length > 0
+      ? unansweredQids
+          .map((qid) => {
+            const qText = CAREER_FOG_QUESTIONS[qid]?.text ?? `Question ${qid}`;
+            return `- Q${qid} (left open after 3 IDKs): "${qText}"`;
+          })
+          .join("\n")
+      : "None";
+
+  const day5DirectionQuotes = answers
+    .filter((a) => a.day === 5 && !a.excludedFromAI && a.qid >= 24)
+    .map((a) => `[Day 5 · Q${a.qid}] "${a.text}"`)
     .join("\n");
 
-  const specialInstructions: string[] = [getCrisisFramingGuidance(crisisType)];
+  const q29Answer = answers.find((a) => a.qid === 29 && !a.excludedFromAI);
+  const q29Rule =
+    q29Answer && q29Answer.text.trim().length > 0
+      ? `\nUser's Q29 Priorities ("In your words" — reflect without adding prescriptive actions, and ask "Is this yours, or was it handed to you?"):\n${q29Answer.text}\n`
+      : "";
 
-  if (hasFlaggedIdk) {
-    specialInstructions.push(
-      `IDK SILENCE RULE: Include this exact sentence naturally: "There was a question you could not answer. That silence might be the most important data point of your entire Spiral."`,
-    );
-  }
+  return `${framingBlock}
 
-  if (q29Answer && q29Answer.text.trim().length > 0) {
-    specialInstructions.push(
-      `USER'S OWN PRIORITIES RULE (Q29): They wrote these priorities and next steps in their own words:\n${q29Answer.text}\nReflect these back plainly without suggesting any priorities or actions of your own, and close by asking: "Is this yours, or was it handed to you?"`,
-    );
-  }
+Pattern Map & Verbatim Quotes:
+${patternsBlock}
 
-  return `${specialInstructions.join("\n\n")}
+Contradictions & Value Quotes:
+${contradictionsBlock}
 
----
-Validated Pre-Bridge Pattern Map:
-${patternSummary}
-
----
-5-Day Answers:
-${journeyTranscript}
-
----
-5-Day Bridges:
-${bridgeTranscript}
-
-Write the Day 5 synthesis JSON now ("text" 500 to 800 words, plain-spoken unbiased tone, ZERO suggested priorities/actions, ZERO clinical/pattern labels, 3 to 5 "insights" each with >= 2 quotes across >= 2 pre-Bridge days AND ending with "Or it may simply be that...").`;
+Unanswered Question(s) Flagged:
+${unansweredBlock}
+${day5DirectionQuotes ? `\nDay 5 Direction Quotes:\n${day5DirectionQuotes}\n` : ""}${q29Rule}
+Write the Day 5 synthesis JSON now (500 to 800 words, parts 1..6 in order, hedged language, zero pattern labels outside quoted user text, 3 to 5 insights with IDs/quotes).`;
 }

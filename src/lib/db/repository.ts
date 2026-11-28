@@ -769,7 +769,7 @@ export async function savePatternFlags(
   personId: string,
   journeyId: string,
   flags: PatternFlagDoc[],
-  crisisType: CrisisType,
+  crisisType: CrisisType | null,
 ): Promise<void> {
   const validatedFlags = flags.map((f) => PatternFlagDocSchema.parse(f));
   logInfo("db.savePatternFlags", {
@@ -1080,7 +1080,7 @@ export async function getCachedDemoSynthesis(): Promise<DemoSynthesisCacheDoc | 
  * (`demoCache/career_fog_synthesis`) so subsequent demo runs load instantly without live Gemini calls.
  */
 export async function saveCachedDemoSynthesis(params: {
-  crisisType: CrisisType;
+  crisisType: CrisisType | null;
   flags: PatternFlagDoc[];
   synthesis: SynthesisDoc;
 }): Promise<DemoSynthesisCacheDoc> {

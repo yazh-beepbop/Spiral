@@ -292,20 +292,22 @@ async function runVerification(): Promise<void> {
       return {
         id: "ix_patterns",
         text: JSON.stringify({
-          crisisType: "burnout",
-          flags: [
+          crisis_type: "burnout",
+          patterns: [
             {
-              patternKey: "values_behavior_gap",
+              key: "values_behavior_gap",
               category: "signal_flag",
               firstBridgeHintDay: 4,
               evidence: [
                 {
-                  answerPath: "sessions/1/answers/q_5",
+                  qid: 5,
+                  day: 1,
                   quote:
                     "hand back half the management meetings and spend mornings actually building",
                 },
                 {
-                  answerPath: "sessions/4/answers/q_20",
+                  qid: 20,
+                  day: 4,
                   quote:
                     "I ranked recognition dead last and autonomy first, yet I spent 80% of last week chasing executive recognition",
                 },
@@ -313,33 +315,39 @@ async function runVerification(): Promise<void> {
               confidence: 0.94,
             },
             {
-              patternKey: "embodiment_deprivation",
+              key: "embodiment_deprivation",
               category: "signal_flag",
               firstBridgeHintDay: 2,
               evidence: [
                 {
-                  answerPath: "sessions/1/answers/q_2",
-                  quote: "repairing an old wooden study lamp and wiring a dimmer switch by hand",
+                  qid: 2,
+                  day: 1,
+                  quote:
+                    "repairing an old wooden study lamp and wiring a dimmer switch by hand",
                 },
                 {
-                  answerPath: "sessions/2/answers/q_10",
-                  quote: "Working with physical materials — wood, solder, ink on paper",
+                  qid: 10,
+                  day: 2,
+                  quote:
+                    "Working with physical materials — wood, solder, ink on paper",
                 },
               ],
               confidence: 0.9,
             },
             {
-              patternKey: "already_knows",
+              key: "already_knows",
               category: "signal_flag",
               firstBridgeHintDay: null,
               evidence: [
                 {
-                  answerPath: "sessions/3/answers/q_17",
+                  qid: 17,
+                  day: 3,
                   quote:
                     "Saying yes to steering committees and mentoring tracks I don't believe in",
                 },
                 {
-                  answerPath: "sessions/5/answers/q_28",
+                  qid: 28,
+                  day: 5,
                   quote:
                     "Book the conversation with my VP next Tuesday to step off the management track",
                 },
@@ -347,6 +355,27 @@ async function runVerification(): Promise<void> {
               confidence: 0.92,
             },
           ],
+          contradictions: [
+            {
+              stated_value: "Autonomy ranked #1 and recognition #5",
+              actual_behaviour: "80% of last week spent chasing executive recognition",
+              value_quote: {
+                qid: 19,
+                quote: "1. autonomy, 2. mastery, 3. impact, 4. belonging, 5. recognition",
+              },
+              behaviour_quote: {
+                qid: 20,
+                quote:
+                  "I ranked recognition dead last and autonomy first, yet I spent 80% of last week chasing executive recognition",
+              },
+            },
+          ],
+          unanswered_qids: [],
+          already_knows: {
+            value: true,
+            answer:
+              "Book the conversation with my VP next Tuesday to step off the management track",
+          },
         }),
       };
     }

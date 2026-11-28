@@ -1,0 +1,325 @@
+{
+  "id": "synthetic-already-knows",
+  "title": "Already knows the exact move, waiting for permission",
+  "persona": "31-year-old agency design lead in Chennai with 18 months of savings who already knows they want to join Karthik's vernacular health tool",
+  "expectedCrisisType": "transition",
+  "expectedAlreadyKnows": true,
+  "expectedUnansweredQids": [],
+  "answers": [
+    {
+      "day": 1,
+      "qid": 1,
+      "layer": "L2",
+      "questionText": "How do you feel about your work right now?",
+      "text": "Fine",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 2,
+      "layer": "L1",
+      "questionText": "When was the last time you lost track of time? What were you doing?",
+      "text": "Last Thursday night from 9pm to 1am, prototyping Tamil voice-guided clinic check-in screens with my friend Karthik.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 3,
+      "layer": "L1",
+      "questionText": "What do people come to you for? Do you enjoy being that person?",
+      "text": "Rescuing agency pitch decks for overseas SaaS clients. I can do it half-asleep, and I stopped enjoying it two years ago.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 4,
+      "layer": "L1",
+      "questionText": "Describe a real Tuesday. Not ideal. Real.",
+      "text": "Reviewing junior designers' ad banners all day at the agency while secretly thinking about the clinic prototype sitting in my personal Figma tab.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 1,
+      "qid": 5,
+      "layer": "L1",
+      "questionText": "What would you change if it were easy?",
+      "text": "Hand over my agency accounts and spend every weekday testing our vernacular health tool in real clinics across Tamil Nadu.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"Your body is at the agency, and your mind is already in those clinics. What are you still waiting to verify?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "I have 18 months of living expenses saved and zero debt, yet I keep inventing one more spreadsheet before saying yes.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 7,
+      "layer": "L1",
+      "questionText": "Think about the last three times you had genuine fun. What were you doing?",
+      "text": "Watching a 65-year-old patient in Tambaram use our prototype on the first tap, surfing in Kovalam at dawn, building signage for a local library.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 8,
+      "layer": "L2",
+      "questionText": "Two projects: A is structured, B is open-ended. Which one lights you up?",
+      "text": "B is open-ended",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 9,
+      "layer": "L2",
+      "questionText": "What counts as fun at work? Be specific.",
+      "text": "Sitting in a real waiting room, watching where someone hesitates on a screen, and shipping the fix that same afternoon.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 10,
+      "layer": "L1",
+      "questionText": "What activities outside work make you feel most alive?",
+      "text": "Ocean mornings in Kovalam and field visits with Karthik.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 2,
+      "qid": 11,
+      "layer": "L3",
+      "questionText": "With 18 months of savings ready and clinic visits lighting you up, what happens right before you close the spreadsheet?",
+      "text": "I hear my uncle's old voice saying a steady agency salary is foolish to leave before marriage.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"You built an 18-month runway, then parked on it. Whose safety number are you still calculating?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "Even my parents told me last month they trust my judgment — the hesitation is just old habit in my own head now.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 12,
+      "layer": "L1",
+      "questionText": "Which world (school, work, social) felt most like you? Which was the biggest performance?",
+      "text": "Clinic field testing with Karthik feels 100% like me. Pitching luxury US SaaS rebrands on Zoom is pure theatre.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 13,
+      "layer": "L1",
+      "questionText": "If you could be honest with everyone for one day, with zero consequences, what would you say, and to whom?",
+      "text": "I would tell my agency founder that I'm grateful for five good years and that my chapter here ended six months ago.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 14,
+      "layer": "L1",
+      "questionText": "When you get dressed, are you dressing as who you are, or who you're creating?",
+      "text": "Linen shirt and sneakers — already dressing like someone who works in clinics, not a pitch room.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 15,
+      "layer": "L1",
+      "questionText": "Who would you still talk to if you lived in total isolation? Why them?",
+      "text": "Karthik and my younger brother Arun. Both keep asking why I haven't picked a start date yet.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 16,
+      "layer": "L3",
+      "questionText": "You said your chapter at the agency ended six months ago and your parents already back you. What changes if you stop waiting?",
+      "text": "I stop splitting my energy in half and finally find out how good this tool can get when I give it my mornings.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 17,
+      "layer": "L1",
+      "questionText": "If nobody could judge you, what would you stop doing tomorrow?",
+      "text": "Pretending I am 'still weighing options' when I already decided in my gut.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 3,
+      "qid": 18,
+      "layer": "L1",
+      "questionText": "When was the last time you felt like yourself?",
+      "text": "Last Thursday night sketching the Tamil voice check-in flow.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"You said you stopped 'weighing options' months ago. What does calling it confusion still buy you?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "Calling it confusion lets me avoid the awkward 20-minute resignation conversation with my boss.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 19,
+      "layer": "L1",
+      "questionText": "Rank these: autonomy, mastery, impact, recognition, belonging.",
+      "text": "1. impact, 2. autonomy, 3. mastery, 4. belonging, 5. recognition",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 20,
+      "layer": "L1",
+      "questionText": "Look at how you spent last week. Does it match your ranking?",
+      "text": "No — I ranked impact #1, yet 40 weekday hours went to ad banners while real clinic impact got squeezed into midnight hours.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 21,
+      "layer": "L1",
+      "questionText": "Imagine being privately, quietly proud five years from now. First image. Don't think.",
+      "text": "Fifty district clinics across South India running our accessible check-in tool smoothly for older patients.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 22,
+      "layer": "L2",
+      "questionText": "Does prestige feel good, or just useful?",
+      "text": "Barely even useful anymore.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 4,
+      "qid": 23,
+      "layer": "L3",
+      "questionText": "Your pride image is fifty district clinics running smoothly, while 40 hours last week went to ad banners. What drives the gap?",
+      "text": "Postponing one uncomfortable 20-minute notice conversation.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 6,
+      "layer": "Opener",
+      "questionText": "Welcome back. Yesterday I left you with this: \"Everything between your current week and your five-year pride image is one twenty-minute conversation. When do you want to have it?\" Before we start, did anything surface overnight? Even something small.",
+      "text": "Drafted my transition handover doc this morning before opening Spiral.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 24,
+      "layer": "L2",
+      "questionText": "What would you do for free that people would eventually pay for?",
+      "text": "Designing vernacular healthcare interfaces for first-time smartphone users.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 25,
+      "layer": "L1",
+      "questionText": "What's the one move with low downside and huge upside that you've been avoiding?",
+      "text": "Giving my two-month notice at the agency with 18 months of savings in the bank.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 26,
+      "layer": "L1",
+      "questionText": "Describe your ideal Monday morning. First three hours. Specific.",
+      "text": "6am surf at Kovalam, filter coffee at 8, sitting in the Tambaram clinic with Karthik at 9am testing live with patients.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 27,
+      "layer": "L1",
+      "questionText": "What would you bet on? Not the safe bet. The real one.",
+      "text": "Building our vernacular clinic platform full-time.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 28,
+      "layer": "L1",
+      "questionText": "What's the one thing you know you need to do but haven't done yet?",
+      "text": "Give notice at the agency on Monday and build the vernacular health tool full-time with Karthik.",
+      "idkCount": 0,
+      "idkFlagged": false
+    },
+    {
+      "day": 5,
+      "qid": 29,
+      "layer": "L1",
+      "questionText": "In your own words, name your top 3 priorities right now, and one small next step for each.",
+      "text": "1. Priority: Close out my agency chapter cleanly — Next step: Book a 1-on-1 with my founder for Monday 11am with my handover plan.\n2. Priority: Commit full-time to the vernacular clinic tool — Next step: Sign the co-founder working agreement with Karthik on Wednesday.\n3. Priority: Keep my financial runway transparent — Next step: Set a 12-month review checkpoint in my savings sheet.",
+      "idkCount": 0,
+      "idkFlagged": false
+    }
+  ],
+  "bridges": [
+    {
+      "day": 1,
+      "format": "pattern_observation",
+      "text": "Your body is at the agency, and your mind is already in those clinics. What are you still waiting to verify?"
+    },
+    {
+      "day": 2,
+      "format": "belief_challenge",
+      "text": "You built an 18-month runway, then parked on it. Whose safety number are you still calculating?"
+    },
+    {
+      "day": 3,
+      "format": "reframe_question",
+      "text": "You said you stopped 'weighing options' months ago. What does calling it confusion still buy you?"
+    },
+    {
+      "day": 4,
+      "format": "reframe_question",
+      "text": "Everything between your current week and your five-year pride image is one twenty-minute conversation. When do you want to have it?"
+    },
+    {
+      "day": 5,
+      "format": "reframe_question",
+      "text": "What is the answer you already know but have been waiting for permission to act on?"
+    }
+  ]
+}
